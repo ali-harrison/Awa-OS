@@ -1,8 +1,16 @@
 import { Resend } from 'resend'
 
-export const resend = new Resend(process.env.RESEND_API_KEY!)
+let _resend: Resend | null = null
 
-export const FROM_ADDRESS = 'AWA/OS <noreply@tewairama.co.nz>'
+export function getResend(): Resend {
+  if (!_resend) {
+    if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY is not set')
+    _resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return _resend
+}
+
+export const FROM_ADDRESS = 'AWA OS <no-reply@tewairama.digital>'
 
 // ─── EMAIL TEMPLATE KEYS ──────────────────────────────────────────────────────
 
