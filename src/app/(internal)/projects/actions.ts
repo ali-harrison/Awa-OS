@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { resend, FROM_ADDRESS } from '@/lib/resend/client'
+import { getResend, FROM_ADDRESS } from '@/lib/resend/client'
 import { templates } from '@/lib/resend/templates'
 import type { ProjectTier, ProjectStatus } from '@/types'
 
@@ -55,7 +55,7 @@ export async function createProjectAction(
       const questionnaireUrl = `${baseUrl}/portal/${client.slug}/questionnaire`
 
       // Send welcome email
-      const welcomeResult = await resend.emails.send({
+      const welcomeResult = await getResend().emails.send({
         from: FROM_ADDRESS,
         to: client.email,
         subject: templates.welcome_client.subject({ clientName: client.name, projectName: name, portalUrl }),
@@ -72,7 +72,7 @@ export async function createProjectAction(
       })
 
       // Send questionnaire link email
-      const questionnaireResult = await resend.emails.send({
+      const questionnaireResult = await getResend().emails.send({
         from: FROM_ADDRESS,
         to: client.email,
         subject: templates.questionnaire_link.subject({ clientName: client.name, projectName: name, questionnaireUrl }),

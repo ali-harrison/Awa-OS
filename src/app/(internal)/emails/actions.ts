@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { resend, FROM_ADDRESS } from '@/lib/resend/client'
+import { getResend, FROM_ADDRESS } from '@/lib/resend/client'
 import { templates } from '@/lib/resend/templates'
 import type { TemplateKey } from '@/lib/resend/templates'
 
@@ -29,7 +29,7 @@ export async function sendEmailAction(data: {
     return { error: 'Failed to render template.' }
   }
 
-  const { error } = await resend.emails.send({
+  const { error } = await getResend().emails.send({
     from: FROM_ADDRESS,
     to: data.to,
     subject,
