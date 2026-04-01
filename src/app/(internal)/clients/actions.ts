@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient as createSupabaseClient } from '@/lib/supabase/server'
+import { logActivity } from '@/lib/logger'
 import type { ClientType, ClientStatus } from '@/types'
 
 function generateSlug(input: string): string {
@@ -41,6 +42,9 @@ export async function createClientAction(
 
   if (error) return { error: error.message }
 
+  const { data: created } = await supabase.from('clients').select('id').eq('slug', finalSlug).single()
+  await logActivity({ type: 'audit', entity: 'client', entity_id: created?.id, action: 'created', meta: { name, email } })
+
   revalidatePath('/clients')
   return null
 }
@@ -66,6 +70,8 @@ export async function updateClientAction(
     .eq('id', id)
 
   if (error) return { error: error.message }
+
+  await logActivity({ type: 'audit', entity: 'client', entity_id: id, action: 'updated', meta: { name, email } })
 
   revalidatePath('/clients')
   revalidatePath(`/clients/${id}`)
