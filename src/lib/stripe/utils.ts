@@ -1,4 +1,4 @@
-import { stripe } from './client'
+import { getStripe } from './client'
 
 /**
  * Create a Stripe Payment Intent for an invoice.
@@ -15,7 +15,7 @@ export async function createPaymentIntent({
   clientId: string
   description: string
 }) {
-  return stripe.paymentIntents.create({
+  return getStripe().paymentIntents.create({
     amount: amountCents,
     currency: 'nzd',
     description,
@@ -44,7 +44,7 @@ export async function createCheckoutSession({
   successUrl: string
   cancelUrl: string
 }) {
-  return stripe.checkout.sessions.create({
+  return getStripe().checkout.sessions.create({
     mode: 'payment',
     customer_email: clientEmail,
     line_items: [
