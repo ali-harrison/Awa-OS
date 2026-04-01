@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { stripe } from '@/lib/stripe/client'
+import { getStripe } from '@/lib/stripe/client'
 import type { LineItem } from '@/types'
 
 /** Auto-generate next invoice number for the current year: TWD-{YEAR}-{seq} */
@@ -66,7 +66,7 @@ export async function createInvoiceAction(
   let stripePaymentIntentId: string | null = null
   try {
     if (process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY.startsWith('sk_dummy')) {
-      const paymentLink = await stripe.paymentLinks.create({
+      const paymentLink = await getStripe().paymentLinks.create({
         line_items: lineItems.map((li) => ({
           price_data: {
             currency: 'nzd',
@@ -92,7 +92,7 @@ export async function createInvoiceAction(
     gst_included: gstIncluded,
     due_date: dueDate,
     line_items: lineItems,
-    stripe_payment_intent_id: stripePaymentIntentId,
+    stripe_payment_link: stripePaymentIntentId,
   })
 
   if (error) return { error: error.message }
