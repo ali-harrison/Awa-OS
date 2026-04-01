@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { logActivity } from '@/lib/logger'
 import type { TaskStatus, ProjectStatus, FileType, CalendarEventType } from '@/types'
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
@@ -105,10 +106,12 @@ export async function saveNotesAction(projectId: string, notes: string) {
 
 export async function updateStatusAction(projectId: string, status: ProjectStatus) {
   const supabase = await createClient()
+  const { data: existing } = await supabase.from('projects').select('status').eq('id', projectId).single()
   await supabase
     .from('projects')
     .update({ status, stage_updated_at: new Date().toISOString() })
     .eq('id', projectId)
+  await logActivity({ type: 'change', entity: 'project', entity_id: projectId, action: 'status_changed', meta: { field: 'status', old_value: existing?.status ?? null, new_value: status } })
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/projects')
 }

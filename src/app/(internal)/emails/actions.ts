@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getResend, FROM_ADDRESS } from '@/lib/resend/client'
 import { templates } from '@/lib/resend/templates'
+import { logActivity } from '@/lib/logger'
 import type { TemplateKey } from '@/lib/resend/templates'
 
 export async function sendEmailAction(data: {
@@ -29,7 +30,7 @@ export async function sendEmailAction(data: {
     return { error: 'Failed to render template.' }
   }
 
-  const { error } = await getResend().emails.send({
+  const result = await getResend().emails.send({
     from: FROM_ADDRESS,
     to: data.to,
     subject,
@@ -43,9 +44,17 @@ export async function sendEmailAction(data: {
     template_key: data.templateKey,
     subject,
     sent_at: new Date().toISOString(),
-    status: error ? 'failed' : 'sent',
+    status: result.error ? 'failed' : 'sent',
+  })
+
+  await logActivity({
+    type: 'email',
+    entity: 'client',
+    entity_id: data.clientId,
+    action: 'sent',
+    meta: { to: data.to, subject, template: data.templateKey, resend_id: result.data?.id ?? null },
   })
 
   revalidatePath('/emails')
-  return error ? { error: error.message } : {}
+  return result.error ? { error: result.error.message } : {}
 }

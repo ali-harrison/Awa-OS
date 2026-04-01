@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: '/finances', label: 'Finances', icon: '◆' },
   { href: '/calendar', label: 'Calendar', icon: '◻' },
   { href: '/emails', label: 'Emails', icon: '◇' },
+  { href: '/admin/history', label: 'History', icon: '◎' },
 ] as const
 
 export function Sidebar() {

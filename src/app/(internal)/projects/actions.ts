@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getResend, FROM_ADDRESS } from '@/lib/resend/client'
 import { templates } from '@/lib/resend/templates'
+import { logActivity } from '@/lib/logger'
 import type { ProjectTier, ProjectStatus } from '@/types'
 
 export async function createProjectAction(
@@ -93,8 +94,12 @@ export async function createProjectAction(
         .from('projects')
         .update({ status: 'questionnaire_sent', stage_updated_at: new Date().toISOString() })
         .eq('id', project.id)
+
+      await logActivity({ type: 'email', entity: 'project', entity_id: project.id, action: 'sent', meta: { to: client.email, subject: 'welcome_client + questionnaire_link', template: 'onboarding' } })
     }
   }
+
+  await logActivity({ type: 'audit', entity: 'project', entity_id: project.id, action: 'created', meta: { name, client_id: clientId } })
 
   revalidatePath('/projects')
   return null
@@ -102,10 +107,12 @@ export async function createProjectAction(
 
 export async function updateProjectStatusAction(id: string, status: ProjectStatus) {
   const supabase = await createClient()
+  const { data: existing } = await supabase.from('projects').select('status').eq('id', id).single()
   await supabase
     .from('projects')
     .update({ status, stage_updated_at: new Date().toISOString() })
     .eq('id', id)
+  await logActivity({ type: 'change', entity: 'project', entity_id: id, action: 'status_changed', meta: { field: 'status', old_value: existing?.status ?? null, new_value: status } })
   revalidatePath('/projects')
   revalidatePath(`/projects/${id}`)
 }
