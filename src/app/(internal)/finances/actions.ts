@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe/client'
+import { logActivity } from '@/lib/logger'
 import type { LineItem } from '@/types'
 
 /** Auto-generate next invoice number for the current year: TWD-{YEAR}-{seq} */
@@ -97,6 +98,9 @@ export async function createInvoiceAction(
 
   if (error) return { error: error.message }
 
+  const { data: created } = await supabase.from('invoices').select('id').eq('invoice_number', invoiceNumber).single()
+  await logActivity({ type: 'audit', entity: 'invoice', entity_id: created?.id, action: 'created', meta: { invoice_number: invoiceNumber, amount, client_id: clientId } })
+
   revalidatePath('/finances')
   return null
 }
@@ -107,11 +111,14 @@ export async function markInvoicePaidAction(invoiceId: string) {
     .from('invoices')
     .update({ status: 'paid', paid_at: new Date().toISOString() })
     .eq('id', invoiceId)
+  await logActivity({ type: 'audit', entity: 'invoice', entity_id: invoiceId, action: 'marked_paid' })
   revalidatePath('/finances')
 }
 
 export async function updateInvoiceStatusAction(invoiceId: string, status: string) {
   const supabase = await createClient()
+  const { data: existing } = await supabase.from('invoices').select('status').eq('id', invoiceId).single()
   await supabase.from('invoices').update({ status }).eq('id', invoiceId)
+  await logActivity({ type: 'change', entity: 'invoice', entity_id: invoiceId, action: 'status_changed', meta: { field: 'status', old_value: existing?.status ?? null, new_value: status } })
   revalidatePath('/finances')
 }
