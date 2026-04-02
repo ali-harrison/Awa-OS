@@ -25,8 +25,12 @@ export async function portalLoginAction(
     .eq('email', email.toLowerCase().trim())
     .single()
 
-  if (!client || !client.portal_access || !client.portal_password_hash) {
+  if (!client || !client.portal_access) {
     return { error: 'Invalid email or password.' }
+  }
+
+  if (!client.portal_password_hash) {
+    return { error: 'Your account isn\'t set up yet. Please use the setup link from your welcome email.' }
   }
 
   const valid = await verifyPassword(password, client.portal_password_hash)
