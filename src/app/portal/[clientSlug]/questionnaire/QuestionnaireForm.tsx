@@ -72,6 +72,12 @@ export function QuestionnaireForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <div className="border border-[#2A2A2A] bg-[#111111] px-4 py-3">
+        <p className="text-[#C9963A] font-mono text-xs font-medium mb-1">Files & assets</p>
+        <p className="text-[#8A8580] font-mono text-xs leading-relaxed">
+          Files & assets can be uploaded in the Files tab once your project is set up. No need to attach anything here.
+        </p>
+      </div>
       <p className="text-[#555050] font-mono text-xs border border-[#1A1A1A] px-3 py-2">
         Questions marked <span className="text-[#E05252]">*</span> are required. Take your time — you can come back to this page and your answers will be saved.
       </p>
