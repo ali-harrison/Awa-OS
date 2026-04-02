@@ -17,20 +17,23 @@ const TEMPLATE_META: {
   subject: string
   vars: string[]
   previewVars: Record<string, string>
+  autoVars?: string[]
 }[] = [
   {
     key: 'welcome_client',
     name: 'Welcome',
     subject: 'Welcome to your project — [project name]',
-    vars: ['clientName', 'projectName', 'portalUrl'],
-    previewVars: { clientName: 'Aroha Ngata', projectName: 'Website Redesign', portalUrl: 'https://example.com/portal' },
+    vars: ['clientName', 'projectName'],
+    previewVars: { clientName: 'Aroha Ngata', projectName: 'Website Redesign' },
+    autoVars: ['portalUrl — one-time setup link generated on send'],
   },
   {
     key: 'questionnaire_link',
     name: 'Questionnaire',
     subject: 'Your project questionnaire — [project name]',
-    vars: ['clientName', 'projectName', 'questionnaireUrl'],
-    previewVars: { clientName: 'Aroha Ngata', projectName: 'Website Redesign', questionnaireUrl: 'https://example.com/portal/questionnaire' },
+    vars: ['clientName', 'projectName'],
+    previewVars: { clientName: 'Aroha Ngata', projectName: 'Website Redesign' },
+    autoVars: ['questionnaireUrl — portal link generated on send'],
   },
   {
     key: 'proposal_follow_up',
@@ -80,24 +83,15 @@ function SendSlideOver({
   const selectedClient = clients.find((c) => c.id === selectedClientId)
   const filteredProjects = projects.filter((p) => p.client_id === selectedClientId)
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-
   function handleClientChange(id: string) {
     setSelectedClientId(id)
     setSelectedProjectId('')
     const c = clients.find((c) => c.id === id)
     if (!c) return
 
-    const portalUrl = `${baseUrl}/portal/${c.slug}`
     const inv = latestInvoiceByClient[id]
+    const autoFill: Record<string, string> = { clientName: c.name }
 
-    const autoFill: Record<string, string> = {
-      clientName: c.name,
-      portalUrl,
-      questionnaireUrl: `${portalUrl}/questionnaire`,
-    }
-
-    // Auto-fill invoice vars from their latest open invoice
     if (inv) {
       const amount = new Intl.NumberFormat('en-NZ', {
         style: 'currency', currency: 'NZD', minimumFractionDigits: 2,
@@ -184,6 +178,13 @@ function SendSlideOver({
               onChange={(e) => setVars((prev) => ({ ...prev, [v]: e.target.value }))}
             />
           ))}
+          {template.autoVars && template.autoVars.length > 0 && (
+            <div className="border border-[#1A1A1A] px-3 py-2 mt-1">
+              {template.autoVars.map((v) => (
+                <p key={v} className="text-[#4CAF7D] font-mono text-[10px]">⚡ {v}</p>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -263,6 +264,9 @@ export function EmailsClient({
                   <div className="flex flex-wrap gap-1">
                     {tpl.vars.map((v) => (
                       <Badge key={v} variant="muted">{v}</Badge>
+                    ))}
+                    {tpl.autoVars?.map((v) => (
+                      <Badge key={v} variant="green">⚡ {v}</Badge>
                     ))}
                   </div>
                 </div>
