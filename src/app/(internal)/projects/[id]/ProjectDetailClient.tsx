@@ -44,7 +44,7 @@ const EVENT_TYPE_OPTIONS: { value: CalendarEventType; label: string }[] = [
   { value: 'reminder', label: 'Reminder' },
 ]
 
-type Tab = 'tasks' | 'files' | 'timeline' | 'notes'
+type Tab = 'tasks' | 'files' | 'timeline' | 'notes' | 'questionnaire'
 
 function formatNZD(value: number) {
   return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', minimumFractionDigits: 0 }).format(value)
@@ -135,6 +135,92 @@ function TasksTab({ tasks, projectId }: { tasks: Task[]; projectId: string }) {
   )
 }
 
+// ─── File Row (with download) ─────────────────────────────────────────────────
+
+function FileRow({ file }: { file: ProjectFile }) {
+  const [url, setUrl] = useState<string | null>(null)
+
+  async function handleDownload() {
+    const { createBrowserClient } = await import('@supabase/ssr')
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    const { data } = await supabase.storage.from('project-files').createSignedUrl(file.storage_path, 60)
+    if (data?.signedUrl) {
+      const a = document.createElement('a')
+      a.href = data.signedUrl
+      a.download = file.name
+      a.click()
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-[#F5F0E8] font-mono text-sm truncate">{file.name}</p>
+        <p className="text-[#555050] font-mono text-xs mt-0.5">
+          {new Date(file.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <Badge variant="muted">{file.type.replace(/_/g, ' ')}</Badge>
+        <Badge variant={file.uploaded_by === 'client' ? 'amber' : 'muted'}>{file.uploaded_by}</Badge>
+        <button
+          onClick={handleDownload}
+          className="text-[#555050] hover:text-[#F5F0E8] font-mono text-[10px] transition-colors cursor-pointer"
+        >
+          ↓ download
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Questionnaire Tab ────────────────────────────────────────────────────────
+
+type QuestionnaireResponseWithTemplate = {
+  responses: Record<string, string>
+  submitted_at: string | null
+  completed: boolean
+  template: { questions: { id: string; question: string; order: number }[] }
+}
+
+function QuestionnaireTab({ response }: { response: QuestionnaireResponseWithTemplate | null }) {
+  if (!response) {
+    return (
+      <div className="border border-[#1A1A1A] px-6 py-10 text-center">
+        <p className="text-[#555050] font-mono text-sm">No questionnaire submitted yet.</p>
+      </div>
+    )
+  }
+
+  const questions = [...response.template.questions].sort((a, b) => a.order - b.order)
+
+  return (
+    <div className="flex flex-col gap-1">
+      {response.submitted_at && (
+        <p className="text-[#4CAF7D] font-mono text-xs mb-4">
+          Submitted {new Date(response.submitted_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
+      )}
+      {questions.map((q, i) => {
+        const answer = response.responses[q.id]
+        return (
+          <div key={q.id} className="border-b border-[#1A1A1A] py-4">
+            <p className="text-[#555050] font-mono text-xs mb-1">
+              <span className="mr-2">{String(i + 1).padStart(2, '0')}.</span>{q.question}
+            </p>
+            <p className="text-[#F5F0E8] font-mono text-sm leading-relaxed pl-6">
+              {answer?.trim() ? answer : <span className="text-[#2A2A2A]">No answer</span>}
+            </p>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Files Tab ────────────────────────────────────────────────────────────────
 
 function FilesTab({ files, projectId, clientId, clientSlug }: {
@@ -182,20 +268,7 @@ function FilesTab({ files, projectId, clientId, clientSlug }: {
       ) : (
         <div className="border border-[#1A1A1A] divide-y divide-[#1A1A1A]">
           {files.map((f) => (
-            <div key={f.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-[#F5F0E8] font-mono text-sm truncate">{f.name}</p>
-                <p className="text-[#555050] font-mono text-xs mt-0.5">
-                  {new Date(f.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Badge variant="muted">{f.type.replace(/_/g, ' ')}</Badge>
-                <Badge variant={f.uploaded_by === 'client' ? 'amber' : 'muted'}>
-                  {f.uploaded_by}
-                </Badge>
-              </div>
-            </div>
+            <FileRow key={f.id} file={f} />
           ))}
         </div>
       )}
@@ -342,12 +415,14 @@ export function ProjectDetailClient({
   tasks,
   files,
   events,
+  questionnaireResponse,
 }: {
   project: Project
   client: Client
   tasks: Task[]
   files: ProjectFile[]
   events: CalendarEvent[]
+  questionnaireResponse: QuestionnaireResponseWithTemplate | null
 }) {
   const [tab, setTab] = useState<Tab>('tasks')
   const [, startTransition] = useTransition()
@@ -356,6 +431,7 @@ export function ProjectDetailClient({
     { key: 'tasks', label: 'Tasks', count: tasks.length },
     { key: 'files', label: 'Files', count: files.length },
     { key: 'timeline', label: 'Timeline', count: events.length },
+    { key: 'questionnaire', label: 'Questionnaire' },
     { key: 'notes', label: 'Notes' },
   ]
 
@@ -434,6 +510,7 @@ export function ProjectDetailClient({
         />
       )}
       {tab === 'timeline' && <TimelineTab events={events} projectId={project.id} />}
+      {tab === 'questionnaire' && <QuestionnaireTab response={questionnaireResponse} />}
       {tab === 'notes' && <NotesTab notes={project.internal_notes} projectId={project.id} />}
     </>
   )

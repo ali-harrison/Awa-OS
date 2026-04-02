@@ -5,7 +5,7 @@ import { Header } from '@/components/layout/Header'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { Badge } from '@/components/ui/Badge'
 import { ProjectDetailClient } from './ProjectDetailClient'
-import type { Client, Project, Task, ProjectFile, CalendarEvent } from '@/types'
+import type { Client, Project, Task, ProjectFile, CalendarEvent, QuestionnaireResponse } from '@/types'
 
 export default async function ProjectDetailPage({
   params,
@@ -20,11 +20,13 @@ export default async function ProjectDetailPage({
     { data: tasks },
     { data: files },
     { data: events },
+    { data: questionnaireResponse },
   ] = await Promise.all([
     supabase.from('projects').select('*, client:clients(*)').eq('id', id).single(),
     supabase.from('tasks').select('*').eq('project_id', id).order('created_at'),
     supabase.from('files').select('*').eq('project_id', id).order('created_at', { ascending: false }),
     supabase.from('calendar_events').select('*').eq('project_id', id).order('start_at'),
+    supabase.from('questionnaire_responses').select('*, template:questionnaire_templates(questions)').eq('project_id', id).maybeSingle(),
   ])
 
   if (!project) notFound()
@@ -51,6 +53,7 @@ export default async function ProjectDetailPage({
           tasks={(tasks ?? []) as Task[]}
           files={(files ?? []) as ProjectFile[]}
           events={(events ?? []) as CalendarEvent[]}
+          questionnaireResponse={questionnaireResponse as (QuestionnaireResponse & { template: { questions: { id: string; question: string; order: number }[] } }) | null}
         />
       </PageWrapper>
     </>
