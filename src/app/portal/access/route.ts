@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   // First visit — no password set yet → go to setup
   if (!client.portal_password_hash) {
     return NextResponse.redirect(
-      new URL(`/portal/${client.slug}/setup?token=${token}`, request.url)
+      new URL(`/portal/setup/${client.slug}?token=${token}`, request.url)
     )
   }
 
