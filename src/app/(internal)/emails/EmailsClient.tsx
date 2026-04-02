@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/Input'
 import { SlideOver } from '@/components/ui/SlideOver'
 import { sendEmailAction } from './actions'
-import type { Client, Project, EmailLog } from '@/types'
+import type { Client, Project, EmailLog, Invoice } from '@/types'
 import type { TemplateKey } from '@/lib/resend/templates'
 
 // ─── Template definitions ─────────────────────────────────────────────────────
@@ -61,11 +61,13 @@ function SendSlideOver({
   template,
   clients,
   projects,
+  latestInvoiceByClient,
   onClose,
 }: {
   template: typeof TEMPLATE_META[number]
   clients: Client[]
   projects: Project[]
+  latestInvoiceByClient: Record<string, Invoice>
   onClose: () => void
 }) {
   const [selectedClientId, setSelectedClientId] = useState('')
@@ -78,11 +80,44 @@ function SendSlideOver({
   const selectedClient = clients.find((c) => c.id === selectedClientId)
   const filteredProjects = projects.filter((p) => p.client_id === selectedClientId)
 
-  // Auto-fill clientName from selected client
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+
   function handleClientChange(id: string) {
     setSelectedClientId(id)
+    setSelectedProjectId('')
     const c = clients.find((c) => c.id === id)
-    if (c) setVars((prev) => ({ ...prev, clientName: c.name }))
+    if (!c) return
+
+    const portalUrl = `${baseUrl}/portal/${c.slug}`
+    const inv = latestInvoiceByClient[id]
+
+    const autoFill: Record<string, string> = {
+      clientName: c.name,
+      portalUrl,
+      questionnaireUrl: `${portalUrl}/questionnaire`,
+    }
+
+    // Auto-fill invoice vars from their latest open invoice
+    if (inv) {
+      const amount = new Intl.NumberFormat('en-NZ', {
+        style: 'currency', currency: 'NZD', minimumFractionDigits: 2,
+      }).format(inv.amount / 100)
+      const dueDate = inv.due_date
+        ? new Date(inv.due_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })
+        : 'on receipt'
+      autoFill.invoiceNumber = inv.invoice_number
+      autoFill.amount = amount
+      autoFill.dueDate = dueDate
+      autoFill.paymentLink = inv.stripe_payment_link ?? ''
+    }
+
+    setVars((prev) => ({ ...prev, ...autoFill }))
+  }
+
+  function handleProjectChange(id: string) {
+    setSelectedProjectId(id)
+    const p = projects.find((p) => p.id === id)
+    if (p) setVars((prev) => ({ ...prev, projectName: p.name }))
   }
 
   async function handleSend() {
@@ -130,7 +165,7 @@ function SendSlideOver({
       <Select
         label="Project (optional)"
         value={selectedProjectId}
-        onChange={(e) => setSelectedProjectId(e.target.value)}
+        onChange={(e) => handleProjectChange(e.target.value)}
         options={[
           { value: '', label: 'No project' },
           ...filteredProjects.map((p) => ({ value: p.id, label: p.name })),
@@ -152,7 +187,7 @@ function SendSlideOver({
         </div>
       </div>
 
-      {/* Preview */}
+      {/* Subject preview */}
       <div>
         <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-2">Subject preview</p>
         <p className="text-[#8A8580] font-mono text-xs border border-[#1A1A1A] px-3 py-2">
@@ -189,10 +224,12 @@ export function EmailsClient({
   clients,
   projects,
   emailLog,
+  latestInvoiceByClient,
 }: {
   clients: Client[]
   projects: Project[]
   emailLog: (EmailLog & { client: Pick<Client, 'name'> | null })[]
+  latestInvoiceByClient: Record<string, Invoice>
 }) {
   const [tab, setTab] = useState<Tab>('templates')
   const [selectedTemplate, setSelectedTemplate] = useState<typeof TEMPLATE_META[number] | null>(null)
@@ -281,6 +318,7 @@ export function EmailsClient({
             template={selectedTemplate}
             clients={clients}
             projects={projects}
+            latestInvoiceByClient={latestInvoiceByClient}
             onClose={() => setSelectedTemplate(null)}
           />
         </SlideOver>
