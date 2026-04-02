@@ -52,7 +52,7 @@ const base = (body: string) => `
   <div class="logo">AWA/OS</div>
   ${body}
   <hr class="divider">
-  <p class="footer">Te Wairama Digital — tewairama.co.nz<br>This is an automated message from AWA/OS.</p>
+  <p class="footer">Te Wairama Digital — tewairama.digital<br>This is an automated message from AWA/OS.</p>
 </body>
 </html>
 `
