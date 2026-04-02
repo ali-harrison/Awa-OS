@@ -1,8 +1,11 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { createElement } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe/client'
+import { getResend, FROM_ADDRESS } from '@/lib/resend/client'
+import { templates } from '@/lib/resend/templates'
 import { logActivity } from '@/lib/logger'
 import type { LineItem } from '@/types'
 
@@ -121,4 +124,96 @@ export async function updateInvoiceStatusAction(invoiceId: string, status: strin
   await supabase.from('invoices').update({ status }).eq('id', invoiceId)
   await logActivity({ type: 'change', entity: 'invoice', entity_id: invoiceId, action: 'status_changed', meta: { field: 'status', old_value: existing?.status ?? null, new_value: status } })
   revalidatePath('/finances')
+}
+
+export async function sendInvoiceAction(invoiceId: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+
+  const { data: inv } = await supabase
+    .from('invoices')
+    .select('*')
+    .eq('id', invoiceId)
+    .single()
+
+  if (!inv) return { error: 'Invoice not found.' }
+
+  const { data: client } = await supabase
+    .from('clients')
+    .select('*')
+    .eq('id', inv.client_id)
+    .single()
+
+  if (!client) return { error: 'Client not found.' }
+
+  // Render PDF server-side
+  let pdfBuffer: Buffer | null = null
+  try {
+    const { renderToBuffer } = await import('@react-pdf/renderer')
+    const { InvoicePDF } = await import('@/components/pdf/InvoicePDF')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    pdfBuffer = await renderToBuffer(createElement(InvoicePDF, { invoice: inv, client }) as any)
+  } catch (err) {
+    console.error('[sendInvoice] PDF render failed:', err)
+  }
+
+  const formattedAmount = new Intl.NumberFormat('en-NZ', {
+    style: 'currency', currency: 'NZD', minimumFractionDigits: 2,
+  }).format(inv.amount / 100)
+
+  const formattedDue = inv.due_date
+    ? new Date(inv.due_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })
+    : 'on receipt'
+
+  const paymentLink = inv.stripe_payment_link ?? ''
+
+  const subject = templates.invoice_sent.subject({
+    clientName: client.name,
+    invoiceNumber: inv.invoice_number,
+    amount: formattedAmount,
+    dueDate: formattedDue,
+    paymentLink,
+  })
+  const html = templates.invoice_sent.html({
+    clientName: client.name,
+    invoiceNumber: inv.invoice_number,
+    amount: formattedAmount,
+    dueDate: formattedDue,
+    paymentLink,
+  })
+
+  const emailPayload: Parameters<ReturnType<typeof getResend>['emails']['send']>[0] = {
+    from: FROM_ADDRESS,
+    to: client.email,
+    subject,
+    html,
+    ...(pdfBuffer
+      ? { attachments: [{ filename: `${inv.invoice_number}.pdf`, content: pdfBuffer }] }
+      : {}),
+  }
+
+  const result = await getResend().emails.send(emailPayload)
+  if (result.error) return { error: result.error.message }
+
+  // Mark as sent
+  await supabase.from('invoices').update({ status: 'sent' }).eq('id', invoiceId)
+
+  await supabase.from('email_log').insert({
+    client_id: client.id,
+    project_id: inv.project_id ?? null,
+    template_key: 'invoice_sent',
+    subject,
+    sent_at: new Date().toISOString(),
+    status: 'sent',
+  })
+
+  await logActivity({
+    type: 'email',
+    entity: 'invoice',
+    entity_id: invoiceId,
+    action: 'sent',
+    meta: { to: client.email, subject, resend_id: result.data?.id ?? null },
+  })
+
+  revalidatePath('/finances')
+  return {}
 }

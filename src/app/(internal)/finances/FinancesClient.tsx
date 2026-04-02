@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/Input'
 import { SlideOver } from '@/components/ui/SlideOver'
-import { createInvoiceAction, markInvoicePaidAction } from './actions'
+import { createInvoiceAction, markInvoicePaidAction, sendInvoiceAction } from './actions'
 import type { Client, Project, Invoice, InvoiceStatus, LineItem } from '@/types'
 
 // Lazy-load PDF button — react-pdf must never touch SSR bundling
@@ -260,6 +260,14 @@ export function FinancesClient({ data }: { data: FinancesData }) {
                 </p>
                 <Badge variant={inv.status as InvoiceStatus}>{inv.status}</Badge>
                 <div className="flex items-center gap-2">
+                  {inv.status === 'draft' && (
+                    <button
+                      onClick={() => startTransition(() => { sendInvoiceAction(inv.id) })}
+                      className="text-[#555050] hover:text-[#C9963A] font-mono text-[10px] cursor-pointer transition-colors"
+                    >
+                      ✉ Send
+                    </button>
+                  )}
                   {inv.status !== 'paid' && (
                     <button
                       onClick={() => startTransition(() => markInvoicePaidAction(inv.id))}
