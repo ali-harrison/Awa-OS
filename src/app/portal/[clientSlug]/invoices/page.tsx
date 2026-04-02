@@ -14,7 +14,7 @@ export default async function PortalInvoicesPage({
 }: {
   params: Promise<{ clientSlug: string }>
 }) {
-  await params
+  const { clientSlug } = await params
   const cookieStore = await cookies()
   const raw = cookieStore.get(PORTAL_COOKIE)?.value
   if (!raw) notFound()
@@ -28,6 +28,7 @@ export default async function PortalInvoicesPage({
     .from('invoices')
     .select('*')
     .eq('client_id', session.clientId)
+    .neq('status', 'draft')
     .order('created_at', { ascending: false })
 
   return (
@@ -61,13 +62,19 @@ export default async function PortalInvoicesPage({
               <div className="flex items-center gap-3 flex-shrink-0">
                 <p className="text-[#F5F0E8] font-mono text-sm font-medium">{formatNZD(inv.amount)}</p>
                 <Badge variant={inv.status as InvoiceStatus}>{inv.status}</Badge>
-                {inv.status === 'sent' && (
+                <a
+                  href={`/portal/${clientSlug}/invoices/${inv.id}/pdf`}
+                  className="text-[#555050] hover:text-[#F5F0E8] font-mono text-xs transition-colors"
+                >
+                  PDF
+                </a>
+                {(inv.status === 'sent' || inv.status === 'overdue') && (
                   inv.stripe_payment_link ? (
                     <a
                       href={inv.stripe_payment_link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="bg-[#F5F0E8] text-[#0A0A0A] font-mono text-xs px-3 py-1.5 hover:bg-[#E8E3DB] transition-colors duration-150"
+                      className="bg-[#d97706] text-[#f0ece3] font-mono text-xs font-bold px-3 py-1.5 hover:bg-[#b45309] transition-colors"
                     >
                       Pay now →
                     </a>
