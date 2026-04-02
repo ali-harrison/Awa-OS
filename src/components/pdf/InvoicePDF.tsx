@@ -1,156 +1,293 @@
-'use client'
+import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer'
 
-import {
-  Document,
-  Page,
-  Text,
-  View,
-  StyleSheet,
-  Font,
-} from '@react-pdf/renderer'
-import type { Invoice, Client } from '@/types'
+// ─── Font ─────────────────────────────────────────────────────────────────────
+
+Font.register({
+  family: 'JetBrains Mono',
+  fonts: [
+    {
+      src: 'https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5/files/jetbrains-mono-latin-400-normal.woff2',
+      fontWeight: 400,
+    },
+    {
+      src: 'https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5/files/jetbrains-mono-latin-700-normal.woff2',
+      fontWeight: 700,
+    },
+  ],
+})
+
+// ─── Tokens ───────────────────────────────────────────────────────────────────
+
+const C = {
+  bg: '#0f0f0f',
+  bone: '#f0ece3',
+  amber: '#d97706',
+  muted: '#8a8580',
+  border: '#2a2a2a',
+  rowAlt: '#161616',
+}
+
+const FONT = 'JetBrains Mono'
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   page: {
-    backgroundColor: '#FAFAF8',
-    fontFamily: 'Courier',
-    fontSize: 9,
-    color: '#1A1A1A',
-    padding: 48,
+    backgroundColor: C.bg,
+    fontFamily: FONT,
+    fontSize: 8,
+    color: C.bone,
+    paddingTop: 48,
+    paddingBottom: 48,
+    paddingHorizontal: 48,
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 40 },
-  wordmark: { fontSize: 16, fontFamily: 'Courier-Bold', letterSpacing: 4, color: '#0A0A0A' },
-  tagline: { fontSize: 7, color: '#8A8580', marginTop: 2, letterSpacing: 2 },
-  metaRight: { alignItems: 'flex-end' },
-  metaLabel: { fontSize: 7, color: '#8A8580', textTransform: 'uppercase', letterSpacing: 1 },
-  metaValue: { fontSize: 9, color: '#0A0A0A', fontFamily: 'Courier-Bold', marginTop: 1 },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 7, color: '#8A8580', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8, borderBottom: '0.5pt solid #E0E0E0', paddingBottom: 4 },
-  row: { flexDirection: 'row', marginBottom: 4 },
-  col: { flex: 1 },
-  lineItemHeader: { flexDirection: 'row', backgroundColor: '#F0F0EE', padding: '4 8', marginBottom: 2 },
-  lineItemRow: { flexDirection: 'row', padding: '4 8', borderBottom: '0.5pt solid #F0F0EE' },
-  lineDesc: { flex: 3 },
-  lineQty: { flex: 1, textAlign: 'right' },
-  linePrice: { flex: 1.5, textAlign: 'right' },
-  lineTotal: { flex: 1.5, textAlign: 'right', fontFamily: 'Courier-Bold' },
-  totalsSection: { marginTop: 8, alignItems: 'flex-end' },
-  totalsRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 3, minWidth: 200 },
-  totalsLabel: { flex: 1, textAlign: 'right', color: '#8A8580', marginRight: 16 },
-  totalsValue: { minWidth: 80, textAlign: 'right' },
-  totalDue: { fontFamily: 'Courier-Bold', fontSize: 11, color: '#0A0A0A' },
-  divider: { borderTop: '1pt solid #1A1A1A', marginVertical: 4 },
-  footer: { position: 'absolute', bottom: 40, left: 48, right: 48 },
-  footerText: { fontSize: 7, color: '#8A8580', textAlign: 'center', letterSpacing: 1 },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 20,
+  },
+  invoiceLabel: {
+    fontSize: 32,
+    fontWeight: 700,
+    color: C.bone,
+    letterSpacing: 4,
+  },
+  invoiceNumber: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: C.amber,
+    letterSpacing: 1,
+  },
+  divider: {
+    borderTopWidth: 0.5,
+    borderTopColor: C.border,
+    marginVertical: 16,
+  },
+  dividerBone: {
+    borderTopWidth: 0.5,
+    borderTopColor: C.bone,
+    marginVertical: 16,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    gap: 24,
+    marginBottom: 4,
+  },
+  metaCol: { flex: 1 },
+  metaColDate: { width: 120, alignItems: 'flex-end' },
+  metaLabel: {
+    fontSize: 7,
+    color: C.muted,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  metaValue: { fontSize: 8, color: C.bone, lineHeight: 1.6 },
+  metaValueBold: { fontSize: 8, fontWeight: 700, color: C.bone, marginBottom: 2 },
+  dateValue: { fontSize: 14, fontWeight: 700, color: C.bone, textAlign: 'right' },
+  dateSub: { fontSize: 7, color: C.muted, textAlign: 'right', marginTop: 4 },
+  dateAmber: { fontSize: 11, fontWeight: 700, color: C.amber, textAlign: 'right' },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: C.border,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginBottom: 1,
+  },
+  tableRow: { flexDirection: 'row', paddingVertical: 7, paddingHorizontal: 8 },
+  tableRowAlt: { backgroundColor: C.rowAlt },
+  colDesc: { flex: 4 },
+  colQty: { width: 48, textAlign: 'center' },
+  colAmt: { width: 80, textAlign: 'right' },
+  thText: {
+    fontSize: 7,
+    fontWeight: 700,
+    color: C.muted,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  tdText: { fontSize: 8, color: C.bone },
+  totalsSection: { marginTop: 12, alignItems: 'flex-end' },
+  totalsRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 4, minWidth: 200 },
+  totalsLabel: { width: 100, textAlign: 'right', color: C.muted, fontSize: 8, marginRight: 16 },
+  totalsValue: { width: 80, textAlign: 'right', fontSize: 8, color: C.bone },
+  totalsDivider: { width: 196, borderTopWidth: 0.5, borderTopColor: C.border, marginBottom: 4, marginTop: 2 },
+  totalLabel: { width: 100, textAlign: 'right', color: C.bone, fontWeight: 700, fontSize: 9, marginRight: 16 },
+  totalValue: { width: 80, textAlign: 'right', fontSize: 11, fontWeight: 700, color: C.amber },
+  disclaimer: { fontSize: 7, color: C.muted, marginTop: 10, lineHeight: 1.5 },
+  paymentTitle: {
+    fontSize: 7,
+    color: C.muted,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  paymentCols: { flexDirection: 'row', gap: 32 },
+  paymentCol: { flex: 1 },
+  paymentKey: {
+    fontSize: 7,
+    color: C.muted,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  paymentValue: { fontSize: 8, color: C.bone, marginBottom: 8 },
+  paymentLinkRow: { marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  paymentLinkLabel: { fontSize: 7, color: C.muted, letterSpacing: 1, textTransform: 'uppercase' },
+  paymentLinkUrl: { fontSize: 8, color: C.amber, fontWeight: 700 },
 })
 
-function formatNZD(cents: number) {
-  return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', minimumFractionDigits: 2 }).format(cents / 100)
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface InvoiceProps {
+  invoiceNumber: string
+  billingDate: string
+  dueDate: string
+  from: { name: string; email: string; address: string }
+  to: { name: string; company: string; email: string; address: string }
+  lineItems: { description: string; quantity: number; amount: number }[]
+  subtotal: number
+  tax: number
+  total: number
+  paymentLink?: string
+  bankDetails: {
+    accountName: string
+    accountNumber: string
+    bankName: string
+    swiftBic?: string
+    reference: string
+  }
+  terms?: string
 }
 
-interface InvoicePDFProps {
-  invoice: Invoice
-  client: Client
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function nzd(cents: number) {
+  return new Intl.NumberFormat('en-NZ', {
+    style: 'currency',
+    currency: 'NZD',
+    minimumFractionDigits: 2,
+  }).format(cents / 100)
 }
 
-export function InvoicePDF({ invoice, client }: InvoicePDFProps) {
-  const subtotal = invoice.line_items.reduce((s, li) => s + li.amount, 0)
-  const gstAmount = invoice.gst_included ? Math.round(subtotal * (15 / 115)) : 0
-  const total = invoice.amount
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function InvoicePDF(props: InvoiceProps) {
+  const { invoiceNumber, billingDate, dueDate, from, to, lineItems, subtotal, tax, total, paymentLink, bankDetails, terms } = props
 
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.wordmark}>AWA/OS</Text>
-            <Text style={styles.tagline}>Te Wairama Digital</Text>
-            <Text style={[styles.tagline, { marginTop: 4 }]}>tewairama.digital</Text>
-          </View>
-          <View style={styles.metaRight}>
-            <Text style={styles.metaLabel}>Invoice</Text>
-            <Text style={styles.metaValue}>{invoice.invoice_number}</Text>
-            <Text style={[styles.metaLabel, { marginTop: 8 }]}>Date</Text>
-            <Text style={styles.metaValue}>
-              {new Date(invoice.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })}
-            </Text>
-            {invoice.due_date && (
-              <>
-                <Text style={[styles.metaLabel, { marginTop: 8 }]}>Due</Text>
-                <Text style={[styles.metaValue, { color: '#C9963A' }]}>
-                  {new Date(invoice.due_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </Text>
-              </>
-            )}
-          </View>
-        </View>
+      <Page size="A4" style={s.page}>
 
-        {/* Bill to */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Billed to</Text>
-          <Text style={{ fontFamily: 'Courier-Bold', marginBottom: 2 }}>{client.name}</Text>
-          {client.company && <Text style={{ color: '#555050' }}>{client.company}</Text>}
-          <Text style={{ color: '#555050' }}>{client.email}</Text>
+        {/* Header */}
+        <View style={s.headerRow}>
+          <Text style={s.invoiceLabel}>INVOICE</Text>
+          <Text style={s.invoiceNumber}>#{invoiceNumber}</Text>
         </View>
+        <View style={s.dividerBone} />
+
+        {/* From / To / Date */}
+        <View style={s.metaRow}>
+          <View style={s.metaCol}>
+            <Text style={s.metaLabel}>Invoice From</Text>
+            <Text style={s.metaValueBold}>{from.name}</Text>
+            <Text style={s.metaValue}>{from.email}</Text>
+            <Text style={s.metaValue}>{from.address}</Text>
+          </View>
+          <View style={s.metaCol}>
+            <Text style={s.metaLabel}>Bill To</Text>
+            {to.company ? <Text style={s.metaValueBold}>{to.company}</Text> : null}
+            <Text style={to.company ? s.metaValue : s.metaValueBold}>{to.name}</Text>
+            <Text style={s.metaValue}>{to.email}</Text>
+            {to.address ? <Text style={s.metaValue}>{to.address}</Text> : null}
+          </View>
+          <View style={s.metaColDate}>
+            <Text style={s.metaLabel}>Billing Date</Text>
+            <Text style={s.dateValue}>{billingDate}</Text>
+            {dueDate ? (
+              <>
+                <Text style={s.dateSub}>Due</Text>
+                <Text style={s.dateAmber}>{dueDate}</Text>
+              </>
+            ) : null}
+          </View>
+        </View>
+        <View style={s.divider} />
 
         {/* Line items */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Services</Text>
-          <View style={styles.lineItemHeader}>
-            <Text style={styles.lineDesc}>Description</Text>
-            <Text style={styles.lineQty}>Qty</Text>
-            <Text style={styles.linePrice}>Unit price</Text>
-            <Text style={styles.lineTotal}>Amount</Text>
-          </View>
-          {invoice.line_items.map((li, i) => (
-            <View key={i} style={styles.lineItemRow}>
-              <Text style={styles.lineDesc}>{li.description}</Text>
-              <Text style={styles.lineQty}>{li.quantity}</Text>
-              <Text style={styles.linePrice}>{formatNZD(li.unit_price)}</Text>
-              <Text style={styles.lineTotal}>{formatNZD(li.amount)}</Text>
-            </View>
-          ))}
+        <View style={s.tableHeader}>
+          <Text style={[s.thText, s.colDesc]}>Description</Text>
+          <Text style={[s.thText, s.colQty]}>Qty</Text>
+          <Text style={[s.thText, s.colAmt]}>Amount</Text>
         </View>
+        {lineItems.map((li, i) => (
+          <View key={i} style={[s.tableRow, i % 2 === 1 ? s.tableRowAlt : {}]}>
+            <Text style={[s.tdText, s.colDesc]}>{li.description}</Text>
+            <Text style={[s.tdText, s.colQty]}>{li.quantity}</Text>
+            <Text style={[s.tdText, s.colAmt]}>{nzd(li.amount)}</Text>
+          </View>
+        ))}
 
         {/* Totals */}
-        <View style={styles.totalsSection}>
-          <View style={styles.totalsRow}>
-            <Text style={styles.totalsLabel}>Subtotal</Text>
-            <Text style={styles.totalsValue}>{formatNZD(subtotal)}</Text>
+        <View style={s.totalsSection}>
+          <View style={s.totalsRow}>
+            <Text style={s.totalsLabel}>Subtotal</Text>
+            <Text style={s.totalsValue}>{nzd(subtotal)}</Text>
           </View>
-          {invoice.gst_included && (
-            <View style={styles.totalsRow}>
-              <Text style={styles.totalsLabel}>GST (15%)</Text>
-              <Text style={styles.totalsValue}>{formatNZD(gstAmount)}</Text>
+          {tax > 0 ? (
+            <View style={s.totalsRow}>
+              <Text style={s.totalsLabel}>GST (15%)</Text>
+              <Text style={s.totalsValue}>{nzd(tax)}</Text>
             </View>
-          )}
-          <View style={[styles.totalsRow, { borderTop: '1pt solid #1A1A1A', paddingTop: 4 }]}>
-            <Text style={[styles.totalsLabel, { fontFamily: 'Courier-Bold', color: '#0A0A0A' }]}>Total due</Text>
-            <Text style={[styles.totalsValue, styles.totalDue]}>{formatNZD(total)}</Text>
+          ) : null}
+          <View style={s.totalsDivider} />
+          <View style={s.totalsRow}>
+            <Text style={s.totalLabel}>Total Due</Text>
+            <Text style={s.totalValue}>{nzd(total)}</Text>
           </View>
         </View>
+        <Text style={s.disclaimer}>
+          All amounts are in New Zealand Dollars (NZD) and include GST where applicable.
+        </Text>
+        <View style={s.divider} />
 
-        {/* Bank details */}
-        {process.env.NEXT_PUBLIC_BANK_ACCOUNT && (
-          <View style={{ marginTop: 32, borderTop: '0.5pt solid #E0E0E0', paddingTop: 12 }}>
-            <Text style={styles.sectionTitle}>Bank transfer</Text>
-            <Text>Account: {process.env.NEXT_PUBLIC_BANK_ACCOUNT}</Text>
-            <Text style={{ color: '#555050', marginTop: 2 }}>
-              Reference: {invoice.invoice_number}
+        {/* Payment Details */}
+        <Text style={s.paymentTitle}>Payment Details</Text>
+        <View style={s.paymentCols}>
+          <View style={s.paymentCol}>
+            <Text style={s.paymentKey}>Account Name</Text>
+            <Text style={s.paymentValue}>{bankDetails.accountName}</Text>
+            <Text style={s.paymentKey}>Account Number</Text>
+            <Text style={s.paymentValue}>{bankDetails.accountNumber}</Text>
+            <Text style={s.paymentKey}>Bank</Text>
+            <Text style={s.paymentValue}>{bankDetails.bankName}</Text>
+            {bankDetails.swiftBic ? (
+              <>
+                <Text style={s.paymentKey}>SWIFT / BIC</Text>
+                <Text style={s.paymentValue}>{bankDetails.swiftBic}</Text>
+              </>
+            ) : null}
+            <Text style={s.paymentKey}>Reference</Text>
+            <Text style={s.paymentValue}>{bankDetails.reference}</Text>
+          </View>
+          <View style={s.paymentCol}>
+            <Text style={s.paymentKey}>Terms</Text>
+            <Text style={[s.paymentValue, { lineHeight: 1.6 }]}>
+              {terms ?? 'Payment is due by the date shown on this invoice. Bank transfer is preferred. Please include the invoice number as your payment reference.'}
             </Text>
           </View>
-        )}
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Te Wairama Digital · tewairama.digital · ali@tewairama.digital
-          </Text>
         </View>
+        {paymentLink ? (
+          <View style={s.paymentLinkRow}>
+            <Text style={s.paymentLinkLabel}>Pay online →</Text>
+            <Text style={s.paymentLinkUrl}>{paymentLink}</Text>
+          </View>
+        ) : null}
+
       </Page>
     </Document>
   )
 }
+
+export default InvoicePDF

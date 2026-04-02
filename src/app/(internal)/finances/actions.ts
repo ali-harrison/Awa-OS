@@ -1,11 +1,11 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createElement } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe/client'
 import { getResend, FROM_ADDRESS } from '@/lib/resend/client'
 import { templates } from '@/lib/resend/templates'
+import { generateInvoicePDF } from '@/lib/generateInvoicePDF'
 import { logActivity } from '@/lib/logger'
 import type { LineItem } from '@/types'
 
@@ -145,26 +145,60 @@ export async function sendInvoiceAction(invoiceId: string): Promise<{ error?: st
 
   if (!client) return { error: 'Client not found.' }
 
-  // Render PDF server-side
-  let pdfBuffer: Buffer | null = null
-  try {
-    const { renderToBuffer } = await import('@react-pdf/renderer')
-    const { InvoicePDF } = await import('@/components/pdf/InvoicePDF')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    pdfBuffer = await renderToBuffer(createElement(InvoicePDF, { invoice: inv, client }) as any)
-  } catch (err) {
-    console.error('[sendInvoice] PDF render failed:', err)
-  }
-
   const formattedAmount = new Intl.NumberFormat('en-NZ', {
     style: 'currency', currency: 'NZD', minimumFractionDigits: 2,
   }).format(inv.amount / 100)
+
+  const billingDate = new Date(inv.created_at).toLocaleDateString('en-NZ', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  })
 
   const formattedDue = inv.due_date
     ? new Date(inv.due_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })
     : 'on receipt'
 
   const paymentLink = inv.stripe_payment_link ?? ''
+
+  const subtotal = (inv.line_items as LineItem[]).reduce((s: number, li: LineItem) => s + li.amount, 0)
+  const tax = inv.gst_included ? Math.round(subtotal * (15 / 115)) : 0
+
+  // Render PDF server-side
+  let pdfBuffer: Buffer | null = null
+  try {
+    pdfBuffer = await generateInvoicePDF({
+      invoiceNumber: inv.invoice_number,
+      billingDate,
+      dueDate: formattedDue,
+      from: {
+        name: 'Ali Harrison',
+        email: 'ali@tewairama.digital',
+        address: 'Auckland, New Zealand',
+      },
+      to: {
+        name: client.name,
+        company: client.company ?? '',
+        email: client.email,
+        address: '',
+      },
+      lineItems: (inv.line_items as LineItem[]).map((li: LineItem) => ({
+        description: li.description,
+        quantity: li.quantity,
+        amount: li.amount,
+      })),
+      subtotal,
+      tax,
+      total: inv.amount,
+      paymentLink: paymentLink || undefined,
+      bankDetails: {
+        accountName: 'Te Wairama Digital',
+        accountNumber: process.env.NEXT_PUBLIC_BANK_ACCOUNT ?? '',
+        bankName: 'ASB Bank',
+        reference: inv.invoice_number,
+      },
+    })
+  } catch (err) {
+    console.error('[sendInvoice] PDF render failed:', err)
+  }
 
   const subject = templates.invoice_sent.subject({
     clientName: client.name,
