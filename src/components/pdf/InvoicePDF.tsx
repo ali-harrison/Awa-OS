@@ -1,16 +1,18 @@
 import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer'
+import path from 'path'
 
 // ─── Font ─────────────────────────────────────────────────────────────────────
+// Local files in /public/fonts — no network fetch, works in Vercel serverless
 
 Font.register({
   family: 'JetBrains Mono',
   fonts: [
     {
-      src: 'https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5/files/jetbrains-mono-latin-400-normal.woff2',
+      src: path.join(process.cwd(), 'public/fonts/JetBrainsMono-Regular.ttf'),
       fontWeight: 400,
     },
     {
-      src: 'https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5/files/jetbrains-mono-latin-700-normal.woff2',
+      src: path.join(process.cwd(), 'public/fonts/JetBrainsMono-Bold.ttf'),
       fontWeight: 700,
     },
   ],
