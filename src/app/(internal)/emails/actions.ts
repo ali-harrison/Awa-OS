@@ -45,7 +45,7 @@ export async function sendEmailAction(data: {
       .from('clients')
       .update({ portal_access: true, portal_token: token, portal_token_expires_at: expires })
       .eq('id', data.clientId)
-    vars.portalUrl = `${appUrl}/portal/${client.slug}/setup?token=${token}`
+    vars.portalUrl = `${appUrl}/portal/setup/${client.slug}?token=${token}`
   }
 
   // questionnaire_link: inject the questionnaire URL from slug
