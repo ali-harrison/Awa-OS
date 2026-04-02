@@ -1,12 +1,11 @@
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { createServiceClient } from '@/lib/supabase/server'
 import { PORTAL_COOKIE } from '@/lib/portal/auth'
 import { PortalNav } from './PortalNav'
 
 async function getPortalClient(slug: string) {
-  // Read session cookie to get clientId
   const cookieStore = await cookies()
   const raw = cookieStore.get(PORTAL_COOKIE)?.value
   if (!raw) return null
@@ -18,10 +17,11 @@ async function getPortalClient(slug: string) {
     const supabase = await createServiceClient()
     const { data } = await supabase
       .from('clients')
-      .select('id, name, company, slug')
+      .select('id, name, company, slug, portal_access')
       .eq('id', session.clientId)
       .single()
 
+    if (!data?.portal_access) return null
     return data
   } catch {
     return null
@@ -36,9 +36,15 @@ export default async function PortalLayout({
   params: Promise<{ clientSlug: string }>
 }) {
   const { clientSlug } = await params
+
+  // Check the slug belongs to a real client first
+  const supabase = await createServiceClient()
+  const { data: exists } = await supabase.from('clients').select('id').eq('slug', clientSlug).single()
+  if (!exists) notFound()
+
   const client = await getPortalClient(clientSlug)
 
-  if (!client) notFound()
+  if (!client) redirect(`/portal/login?slug=${clientSlug}`)
 
   const base = `/portal/${clientSlug}`
 

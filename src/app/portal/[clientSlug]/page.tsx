@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/Badge'
 import { PORTAL_COOKIE } from '@/lib/portal/auth'
-import { NEXT_ACTIONS } from '@/types'
 import type { ProjectStatus } from '@/types'
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -186,7 +185,7 @@ export default async function PortalOverviewPage({
           <a href="mailto:ali@tewairama.digital" className="text-[#8A8580] font-mono text-xs hover:text-[#F5F0E8] transition-colors duration-150">
             ali@tewairama.digital
           </a>
-          <a href="https://wa.me/6421000000" className="text-[#8A8580] font-mono text-xs hover:text-[#F5F0E8] transition-colors duration-150">
+          <a href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? ''}`} className="text-[#8A8580] font-mono text-xs hover:text-[#F5F0E8] transition-colors duration-150">
             WhatsApp →
           </a>
         </div>
