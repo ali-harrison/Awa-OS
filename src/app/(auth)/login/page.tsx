@@ -36,7 +36,7 @@ export default function LoginPage() {
               required
               autoComplete="email"
               autoFocus
-              placeholder="you@tewairama.co.nz"
+              placeholder="you@tewairama.digital"
               className="
                 bg-[#111111] text-[#F5F0E8] font-mono text-sm
                 border border-[#2A2A2A] hover:border-[#3A3A3A] focus:border-[#C9963A]

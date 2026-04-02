@@ -68,7 +68,7 @@ export function InvoicePDF({ invoice, client }: InvoicePDFProps) {
           <View>
             <Text style={styles.wordmark}>AWA/OS</Text>
             <Text style={styles.tagline}>Te Wairama Digital</Text>
-            <Text style={[styles.tagline, { marginTop: 4 }]}>tewairama.co.nz</Text>
+            <Text style={[styles.tagline, { marginTop: 4 }]}>tewairama.digital</Text>
           </View>
           <View style={styles.metaRight}>
             <Text style={styles.metaLabel}>Invoice</Text>
@@ -147,7 +147,7 @@ export function InvoicePDF({ invoice, client }: InvoicePDFProps) {
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Te Wairama Digital · tewairama.co.nz · ali@tewairama.co.nz
+            Te Wairama Digital · tewairama.digital · ali@tewairama.digital
           </Text>
         </View>
       </Page>
