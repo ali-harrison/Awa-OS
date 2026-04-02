@@ -110,7 +110,7 @@ export interface Invoice {
   gst_included: boolean
   due_date: string | null
   paid_at: string | null
-  stripe_payment_intent_id: string | null
+  stripe_payment_link: string | null
   line_items: LineItem[]
   created_at: string
 }
