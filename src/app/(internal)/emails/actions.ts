@@ -37,13 +37,13 @@ export async function sendEmailAction(data: {
 
   const vars = { ...data.vars }
 
-  // welcome_client: generate a one-time setup token and inject the setup URL
+  // welcome_client: enable portal access, generate a one-time setup token
   if (data.templateKey === 'welcome_client' && client) {
     const token = crypto.randomUUID()
     const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
     await supabase
       .from('clients')
-      .update({ portal_token: token, portal_token_expires_at: expires })
+      .update({ portal_access: true, portal_token: token, portal_token_expires_at: expires })
       .eq('id', data.clientId)
     vars.portalUrl = `${appUrl}/portal/${client.slug}/setup?token=${token}`
   }
