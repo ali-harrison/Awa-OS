@@ -12,10 +12,10 @@ export default function ExpiredPage() {
           </p>
           <div className="mt-6 pt-6 border-t border-[#1A1A1A]">
             <a
-              href="mailto:ali@tewairama.co.nz"
+              href="mailto:ali@tewairama.digital"
               className="text-[#F5F0E8] font-mono text-xs hover:text-[#C9963A] transition-colors duration-150"
             >
-              ali@tewairama.co.nz →
+              ali@tewairama.digital →
             </a>
           </div>
         </div>

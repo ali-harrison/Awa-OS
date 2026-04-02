@@ -183,8 +183,8 @@ export default async function PortalOverviewPage({
         <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-3">Contact</p>
         <p className="text-[#F5F0E8] font-mono text-sm mb-1">Ali — Te Wairama Digital</p>
         <div className="flex gap-4">
-          <a href="mailto:ali@tewairama.co.nz" className="text-[#8A8580] font-mono text-xs hover:text-[#F5F0E8] transition-colors duration-150">
-            ali@tewairama.co.nz
+          <a href="mailto:ali@tewairama.digital" className="text-[#8A8580] font-mono text-xs hover:text-[#F5F0E8] transition-colors duration-150">
+            ali@tewairama.digital
           </a>
           <a href="https://wa.me/6421000000" className="text-[#8A8580] font-mono text-xs hover:text-[#F5F0E8] transition-colors duration-150">
             WhatsApp →
