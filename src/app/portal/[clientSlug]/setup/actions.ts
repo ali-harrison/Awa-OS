@@ -39,9 +39,10 @@ export async function setupPasswordAction(
     .update({ portal_token: null, portal_token_expires_at: null })
     .eq('id', client.id)
 
-  // Set session cookie and redirect into portal
+  // Set session cookie and clear the temporary setup cookie
   const session = JSON.stringify({ clientId: client.id, clientSlug: client.slug })
   const cookieStore = await cookies()
+  cookieStore.set('portal_setup_token', '', { maxAge: 0, path: '/portal' })
   cookieStore.set(PORTAL_COOKIE, session, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
