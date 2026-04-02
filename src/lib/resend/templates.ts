@@ -39,20 +39,21 @@ const base = (body: string) => `
 <head>
   <meta charset="utf-8">
   <style>
-    body { background: #0A0A0A; color: #F5F0E8; font-family: 'Courier New', monospace; padding: 40px 24px; max-width: 560px; margin: 0 auto; }
-    .logo { font-size: 18px; font-weight: bold; letter-spacing: 4px; color: #F5F0E8; margin-bottom: 32px; }
-    .divider { border: none; border-top: 1px solid #1A1A1A; margin: 24px 0; }
-    p { font-size: 14px; line-height: 1.7; color: #8A8580; margin: 0 0 16px; }
-    .highlight { color: #F5F0E8; }
-    .btn { display: inline-block; background: #F5F0E8; color: #0A0A0A; padding: 12px 24px; text-decoration: none; font-weight: bold; font-size: 13px; margin: 16px 0; }
-    .footer { font-size: 11px; color: #2A2A2A; margin-top: 40px; }
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+    body { background: #0f0f0f; color: #f0ece3; font-family: 'JetBrains Mono', 'Courier New', monospace; padding: 40px 24px; max-width: 600px; margin: 0 auto; }
+    .logo { font-size: 22px; font-weight: 700; letter-spacing: 0.15em; color: #f0ece3; margin-bottom: 32px; }
+    .divider { border: none; border-top: 1px solid #1a1a1a; margin: 24px 0; }
+    p { font-size: 14px; line-height: 1.7; color: #8a8580; margin: 0 0 16px; }
+    .highlight { color: #f0ece3; }
+    .btn { display: inline-block; background: #d97706; color: #f0ece3; padding: 12px 24px; text-decoration: none; font-weight: 700; font-size: 13px; margin: 16px 0; }
+    .footer { font-size: 11px; color: #3a3a3a; margin-top: 40px; padding-top: 32px; border-top: 1px solid #1a1a1a; }
+    .footer strong { color: #f0ece3; }
   </style>
 </head>
 <body>
   <div class="logo">AWA/OS</div>
   ${body}
-  <hr class="divider">
-  <p class="footer">Te Wairama Digital — tewairama.digital<br>This is an automated message from AWA/OS.</p>
+  <p class="footer"><strong>Te Wairama Digital</strong> — tewairama.digital<br>This is an automated message from AWA/OS.</p>
 </body>
 </html>
 `
@@ -96,7 +97,7 @@ export const templates = {
     html: (v: InvoiceSentVars) => base(`
       <p>Kia ora <span class="highlight">${v.clientName}</span>,</p>
       <p>Please find invoice <span class="highlight">${v.invoiceNumber}</span> attached — <span class="highlight">${v.amount}</span> due by <span class="highlight">${v.dueDate}</span>.</p>
-      <a href="${v.paymentLink}" class="btn">Pay now →</a>
+      ${v.paymentLink ? `<a href="${v.paymentLink}" class="btn">Pay now →</a>` : ''}
       <p>Bank transfer details are included on the invoice if you prefer.</p>
       <p class="highlight">— Ali, Te Wairama Digital</p>
     `),
