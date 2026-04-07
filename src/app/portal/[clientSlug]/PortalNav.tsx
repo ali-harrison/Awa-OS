@@ -27,10 +27,10 @@ export function PortalNav({ base }: { base: string }) {
             key={label}
             href={fullHref}
             className={[
-              'px-4 py-4 font-mono text-xs uppercase tracking-widest transition-colors duration-150',
+              'px-4 py-4 font-mono text-xs uppercase tracking-widest transition-colors duration-150 border-b-2',
               isActive
-                ? 'text-[#F5F0E8] border-b border-[#C9963A]'
-                : 'text-[#555050] hover:text-[#F5F0E8] border-b border-transparent',
+                ? 'text-[#f0ece3] border-[#f59e0b]'
+                : 'text-[#555555] hover:text-[#f0ece3] border-transparent',
             ].join(' ')}
           >
             {label}
