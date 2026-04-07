@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { Upload } from 'lucide-react'
 import { createFileRecordAction } from '@/app/(internal)/projects/[id]/actions'
 import { useRouter } from 'next/navigation'
 
@@ -15,12 +16,11 @@ export function PortalFileUpload({
 }) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [dragging, setDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  async function handleUpload(file: File) {
     setUploading(true)
     setError(null)
     try {
@@ -49,7 +49,7 @@ export function PortalFileUpload({
       })
 
       router.refresh()
-    } catch (e) {
+    } catch {
       setError('Upload failed. Please try again.')
     } finally {
       setUploading(false)
@@ -58,17 +58,46 @@ export function PortalFileUpload({
   }
 
   return (
-    <div className="border border-dashed border-[#2A2A2A] hover:border-[#3A3A3A] px-6 py-6 text-center transition-colors duration-150">
-      <p className="text-[#555050] font-mono text-sm mb-3">Upload a file</p>
+    <div>
+      <div
+        onClick={() => fileRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragging(false)
+          const file = e.dataTransfer.files?.[0]
+          if (file) handleUpload(file)
+        }}
+        style={{
+          border: `2px dashed ${dragging ? '#f59e0b' : '#2a2a2a'}`,
+          borderRadius: 6,
+          padding: '40px 24px',
+          textAlign: 'center',
+          cursor: uploading ? 'default' : 'pointer',
+          transition: 'border-color 0.15s',
+          background: dragging ? 'rgba(245,158,11,0.04)' : 'transparent',
+        }}
+        onMouseEnter={(e) => { if (!dragging) e.currentTarget.style.borderColor = '#f59e0b' }}
+        onMouseLeave={(e) => { if (!dragging) e.currentTarget.style.borderColor = '#2a2a2a' }}
+      >
+        <Upload size={24} style={{ color: '#2a2a2a', margin: '0 auto 12px' }} />
+        {uploading ? (
+          <p className="font-mono text-sm" style={{ color: '#f59e0b' }}>Uploading…</p>
+        ) : (
+          <p className="font-mono text-sm" style={{ color: '#555555' }}>Drop a file or click to browse</p>
+        )}
+      </div>
       <input
         ref={fileRef}
         type="file"
-        onChange={handleUpload}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f) }}
         disabled={uploading}
-        className="font-mono text-sm text-[#8A8580] file:bg-[#1A1A1A] file:border file:border-[#2A2A2A] file:text-[#F5F0E8] file:font-mono file:text-xs file:px-3 file:py-1.5 file:mr-3 file:cursor-pointer disabled:opacity-40"
+        className="hidden"
       />
-      {uploading && <p className="text-[#C9963A] font-mono text-xs mt-2">Uploading…</p>}
-      {error && <p className="text-[#E05252] font-mono text-xs mt-2">{error}</p>}
+      {error && (
+        <p className="font-mono text-xs mt-2" style={{ color: '#ef4444' }}>{error}</p>
+      )}
     </div>
   )
 }

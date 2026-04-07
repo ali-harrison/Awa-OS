@@ -87,7 +87,7 @@ export default async function PortalLayout({
           <form action="/portal/logout" method="POST">
             <button
               type="submit"
-              className="text-[#555050] hover:text-[#F5F0E8] font-mono text-xs uppercase tracking-widest transition-colors duration-150"
+              className="text-[#555555] hover:text-[#f59e0b] font-mono text-xs uppercase tracking-widest transition-colors duration-150"
             >
               Log out
             </button>
