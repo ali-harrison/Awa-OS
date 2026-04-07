@@ -81,7 +81,7 @@ export async function createInvoiceAction(
         })),
         metadata: { invoice_number: invoiceNumber, client_id: clientId },
       })
-      stripePaymentIntentId = paymentLink.id
+      stripePaymentIntentId = paymentLink.url
     }
   } catch (_) {
     // Stripe not configured — skip payment link silently
