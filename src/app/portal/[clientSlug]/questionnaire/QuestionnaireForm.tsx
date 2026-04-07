@@ -5,6 +5,13 @@ import { Button } from '@/components/ui/Button'
 import { submitQuestionnaireAction } from './actions'
 import type { QuestionnaireTemplate, QuestionnaireResponse, QuestionItem } from '@/types'
 
+const card = {
+  background: '#0f0f0f',
+  border: '1px solid #1f1f1f',
+  borderRadius: 6,
+  boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+} as const
+
 export function QuestionnaireForm({
   template,
   projectId,
@@ -14,37 +21,37 @@ export function QuestionnaireForm({
   projectId: string
   existingResponse: QuestionnaireResponse | null
 }) {
-  const questions: QuestionItem[] = [
-    ...template.questions,
-  ].sort((a, b) => a.order - b.order)
+  const questions: QuestionItem[] = [...template.questions].sort((a, b) => a.order - b.order)
 
-  const [answers, setAnswers] = useState<Record<string, string>>(
-    existingResponse?.responses ?? {}
-  )
+  const [answers, setAnswers] = useState<Record<string, string>>(existingResponse?.responses ?? {})
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(existingResponse?.completed ?? false)
   const [error, setError] = useState<string | null>(null)
 
   if (submitted) {
     return (
-      <div className="border border-[#4CAF7D33] bg-[#4CAF7D0A] px-6 py-8 text-center">
-        <p className="text-[#4CAF7D] font-mono text-sm font-medium mb-2">Questionnaire received</p>
-        <p className="text-[#8A8580] font-mono text-sm leading-relaxed">
-          Thank you — we&apos;ll review your answers and be in touch shortly.
-        </p>
-        {existingResponse?.submitted_at && (
-          <p className="text-[#555050] font-mono text-xs mt-4">
-            Submitted {new Date(existingResponse.submitted_at).toLocaleDateString('en-NZ', {
-              day: 'numeric', month: 'long', year: 'numeric',
-            })}
+      <div className="flex flex-col gap-6">
+        {/* Confirmation banner */}
+        <div style={{ ...card, border: '1px solid rgba(245,158,11,0.25)', padding: '24px' }}>
+          <p className="font-mono text-sm font-medium mb-1" style={{ color: '#f59e0b' }}>Questionnaire received</p>
+          <p className="font-mono text-sm leading-relaxed" style={{ color: '#555555' }}>
+            Thank you — we&apos;ll review your answers and be in touch shortly.
           </p>
-        )}
-        {/* Show read-only answers */}
-        <div className="mt-8 text-left flex flex-col gap-4">
+          {existingResponse?.submitted_at && (
+            <p className="font-mono text-xs mt-3" style={{ color: '#555555' }}>
+              Submitted {new Date(existingResponse.submitted_at).toLocaleDateString('en-NZ', {
+                day: 'numeric', month: 'long', year: 'numeric',
+              })}
+            </p>
+          )}
+        </div>
+
+        {/* Read-only answers */}
+        <div style={{ ...card, padding: '24px' }} className="flex flex-col gap-6">
           {questions.map((q) => answers[q.id] && (
-            <div key={q.id} className="border-l-2 border-[#1A1A1A] pl-4">
-              <p className="text-[#555050] font-mono text-xs mb-1">{q.question}</p>
-              <p className="text-[#F5F0E8] font-mono text-sm">{answers[q.id]}</p>
+            <div key={q.id} className="flex flex-col gap-1">
+              <p className="font-mono text-xs uppercase tracking-widest" style={{ color: '#555555' }}>{q.question}</p>
+              <p className="font-mono text-sm font-medium" style={{ color: '#f0ece3' }}>{answers[q.id]}</p>
             </div>
           ))}
         </div>
@@ -72,38 +79,45 @@ export function QuestionnaireForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <div className="border border-[#2A2A2A] bg-[#111111] px-4 py-3">
-        <p className="text-[#C9963A] font-mono text-xs font-medium mb-1">Files & assets</p>
-        <p className="text-[#8A8580] font-mono text-xs leading-relaxed">
+      {/* Files notice */}
+      <div style={{ background: '#0f0f0f', border: '1px solid #1f1f1f', borderRadius: 6, padding: '12px 16px' }}>
+        <p className="font-mono text-xs font-medium mb-1" style={{ color: '#f59e0b' }}>Files & assets</p>
+        <p className="font-mono text-xs leading-relaxed" style={{ color: '#555555' }}>
           Files & assets can be uploaded in the Files tab once your project is set up. No need to attach anything here.
         </p>
       </div>
-      <p className="text-[#555050] font-mono text-xs border border-[#1A1A1A] px-3 py-2">
-        Questions marked <span className="text-[#E05252]">*</span> are required. Take your time — you can come back to this page and your answers will be saved.
+
+      {/* Required notice */}
+      <p className="font-mono text-xs" style={{ color: '#555555' }}>
+        Questions marked <span style={{ color: '#ef4444' }}>*</span> are required. You can come back and your answers will be saved.
       </p>
 
+      {/* Questions */}
       {questions.map((q, i) => (
         <div key={q.id} className="flex flex-col gap-2">
-          <label className="text-[#F5F0E8] font-mono text-sm font-medium">
-            <span className="text-[#555050] mr-2">{String(i + 1).padStart(2, '0')}.</span>
+          <label className="font-mono text-sm font-medium" style={{ color: '#f0ece3' }}>
+            <span className="mr-2" style={{ color: '#555555' }}>{String(i + 1).padStart(2, '0')}.</span>
             {q.question}
-            {q.required && <span className="text-[#E05252] ml-1">*</span>}
+            {q.required && <span className="ml-1" style={{ color: '#ef4444' }}>*</span>}
           </label>
           {q.hint && (
-            <p className="text-[#555050] font-mono text-xs">{q.hint}</p>
+            <p className="font-mono text-xs" style={{ color: '#555555' }}>{q.hint}</p>
           )}
           <textarea
             value={answers[q.id] ?? ''}
             onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
             rows={3}
-            className="w-full bg-[#111111] text-[#F5F0E8] border border-[#2A2A2A] hover:border-[#3A3A3A] focus:border-[#C9963A] font-mono text-sm px-3 py-2 outline-none resize-y placeholder:text-[#555050] transition-colors duration-150"
+            className="w-full font-mono text-sm px-3 py-2 outline-none resize-y transition-colors duration-150"
+            style={{ background: '#111111', color: '#f0ece3', border: '1px solid #2a2a2a', borderRadius: 4 }}
             placeholder="Your answer…"
+            onFocus={(e) => e.currentTarget.style.borderColor = '#f59e0b'}
+            onBlur={(e) => e.currentTarget.style.borderColor = '#2a2a2a'}
           />
         </div>
       ))}
 
       {error && (
-        <p className="text-[#E05252] font-mono text-xs border border-[#E0525233] bg-[#E0525211] px-3 py-2">
+        <p className="font-mono text-xs px-3 py-2" style={{ color: '#ef4444', background: '#ef444411', border: '1px solid #ef444433', borderRadius: 4 }}>
           {error}
         </p>
       )}
