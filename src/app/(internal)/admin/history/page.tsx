@@ -17,7 +17,7 @@ export default async function HistoryPage({
 
   let query = supabase
     .from('activity_log')
-    .select('*, performed_by_email:performed_by(email)', { count: 'exact' })
+    .select('*', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(offset, offset + pageSize - 1)
 
