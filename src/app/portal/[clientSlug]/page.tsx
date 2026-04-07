@@ -128,7 +128,7 @@ export default async function PortalOverviewPage({
         {/* Status */}
         <div style={{ ...card, padding: '20px 24px' }}>
           <p style={{ margin: '0 0 10px', fontFamily: 'monospace', fontSize: 10, color: '#555555', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Status</p>
-          <p style={{ margin: 0, fontFamily: 'monospace', fontSize: 13, fontWeight: 500, color: activeProject ? STATUS_COLOURS[activeProject.status as ProjectStatus] : '#555050' }}>
+          <p style={{ margin: 0, fontFamily: 'monospace', fontSize: 24, fontWeight: 500, color: '#f0ece3' }}>
             {activeProject ? STATUS_LABELS[activeProject.status as ProjectStatus] : 'No project'}
           </p>
         </div>
@@ -174,7 +174,7 @@ export default async function PortalOverviewPage({
           {/* Project card */}
           <div style={{ ...card, overflow: 'hidden' }}>
             <div className="px-6 py-6 border-b border-[#1f1f1f]">
-              <p className="text-[#F5F0E8] font-mono text-xl font-medium mb-1">{activeProject.name}</p>
+              <p className="text-[#F5F0E8] font-mono text-2xl font-medium mb-1">{activeProject.name}</p>
               {activeProject.estimated_completion && (
                 <p className="text-[#555050] font-mono text-sm">
                   Est. completion:{' '}
