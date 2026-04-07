@@ -10,7 +10,7 @@ type LogEntry = {
   entity_id: string | null
   action: string | null
   meta: Record<string, unknown>
-  performed_by_email?: { email: string } | null
+  performed_by: string | null
 }
 
 const TYPE_ICON: Record<string, string> = {
@@ -129,9 +129,9 @@ function LogRow({ log }: { log: LogEntry }) {
         ) : null}
 
         {/* Performer */}
-        {log.performed_by_email?.email && (
+        {log.performed_by && (
           <span className="text-[#2A2A2A] font-mono text-[10px] mt-0.5 block">
-            {log.performed_by_email.email}
+            {log.performed_by.slice(0, 8)}…
           </span>
         )}
       </div>
