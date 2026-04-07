@@ -107,12 +107,14 @@ export default async function PortalOverviewPage({
     ? 'All milestones complete'
     : `Milestone ${currentStep + 1} of ${totalSteps}`
 
+  const card = { background: '#0f0f0f', border: '1px solid #1f1f1f', borderRadius: 6, boxShadow: '0 1px 3px rgba(0,0,0,0.4)' } as const
+
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
 
       {/* Greeting */}
-      <div>
-        <h1 className="text-[#F5F0E8] font-mono text-3xl font-semibold mb-1">
+      <div className="mb-2">
+        <h1 className="text-[#F5F0E8] font-mono text-4xl font-normal mb-2">
           Kia ora, {client.name.split(' ')[0]}
         </h1>
         <p className="text-[#555050] font-mono text-sm">
@@ -124,17 +126,17 @@ export default async function PortalOverviewPage({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
 
         {/* Status */}
-        <div style={{ background: '#111111', border: '1px solid #1f1f1f', borderRadius: 6, padding: '20px 24px', boxShadow: '0 0 0 1px #1a1a1a' }}>
-          <p style={{ margin: '0 0 8px', fontFamily: 'monospace', fontSize: 10, color: '#555050', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Status</p>
-          <p style={{ margin: 0, fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: activeProject ? STATUS_COLOURS[activeProject.status as ProjectStatus] : '#555050' }}>
+        <div style={{ ...card, padding: '20px 24px' }}>
+          <p style={{ margin: '0 0 10px', fontFamily: 'monospace', fontSize: 10, color: '#555555', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Status</p>
+          <p style={{ margin: 0, fontFamily: 'monospace', fontSize: 13, fontWeight: 500, color: activeProject ? STATUS_COLOURS[activeProject.status as ProjectStatus] : '#555050' }}>
             {activeProject ? STATUS_LABELS[activeProject.status as ProjectStatus] : 'No project'}
           </p>
         </div>
 
         {/* Invoices */}
-        <div style={{ background: '#111111', border: '1px solid #1f1f1f', borderRadius: 6, padding: '20px 24px', boxShadow: '0 0 0 1px #1a1a1a' }}>
-          <p style={{ margin: '0 0 8px', fontFamily: 'monospace', fontSize: 10, color: '#555050', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Invoices</p>
-          <p style={{ margin: '0 0 4px', fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: '#f0ece3' }}>
+        <div style={{ ...card, padding: '20px 24px' }}>
+          <p style={{ margin: '0 0 10px', fontFamily: 'monospace', fontSize: 10, color: '#555555', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Invoices</p>
+          <p style={{ margin: '0 0 4px', fontFamily: 'monospace', fontSize: 24, fontWeight: 500, color: '#f0ece3' }}>
             {invoiceCount}
           </p>
           {outstandingTotal > 0 ? (
@@ -147,20 +149,20 @@ export default async function PortalOverviewPage({
         </div>
 
         {/* Files */}
-        <div style={{ background: '#111111', border: '1px solid #1f1f1f', borderRadius: 6, padding: '20px 24px', boxShadow: '0 0 0 1px #1a1a1a' }}>
-          <p style={{ margin: '0 0 8px', fontFamily: 'monospace', fontSize: 10, color: '#555050', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Files</p>
-          <p style={{ margin: '0 0 4px', fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: '#f0ece3' }}>
+        <div style={{ ...card, padding: '20px 24px' }}>
+          <p style={{ margin: '0 0 10px', fontFamily: 'monospace', fontSize: 10, color: '#555555', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Files</p>
+          <p style={{ margin: '0 0 4px', fontFamily: 'monospace', fontSize: 24, fontWeight: 500, color: '#f0ece3' }}>
             {fileCount}
           </p>
-          <p style={{ margin: 0, fontFamily: 'monospace', fontSize: 11, color: '#555050' }}>
+          <p style={{ margin: 0, fontFamily: 'monospace', fontSize: 11, color: '#555555' }}>
             {fileCount === 1 ? 'file uploaded' : 'files uploaded'}
           </p>
         </div>
 
         {/* Questionnaire */}
-        <div style={{ background: '#111111', border: '1px solid #1f1f1f', borderRadius: 6, padding: '20px 24px', boxShadow: '0 0 0 1px #1a1a1a' }}>
-          <p style={{ margin: '0 0 8px', fontFamily: 'monospace', fontSize: 10, color: '#555050', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Questionnaire</p>
-          <p style={{ margin: 0, fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: questionnaireComplete ? '#4CAF7D' : '#C9963A' }}>
+        <div style={{ ...card, padding: '20px 24px' }}>
+          <p style={{ margin: '0 0 10px', fontFamily: 'monospace', fontSize: 10, color: '#555555', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Questionnaire</p>
+          <p style={{ margin: 0, fontFamily: 'monospace', fontSize: 24, fontWeight: 500, color: questionnaireComplete ? '#4CAF7D' : '#C9963A' }}>
             {questionnaireComplete ? 'Complete ✓' : 'Awaiting'}
           </p>
         </div>
@@ -170,9 +172,9 @@ export default async function PortalOverviewPage({
       {activeProject ? (
         <>
           {/* Project card */}
-          <div className="border border-[#1A1A1A] rounded-md overflow-hidden">
-            <div className="px-6 py-5 border-b border-[#1A1A1A] bg-[#111111]">
-              <p className="text-[#F5F0E8] font-mono text-xl font-semibold mb-1">{activeProject.name}</p>
+          <div style={{ ...card, overflow: 'hidden' }}>
+            <div className="px-6 py-6 border-b border-[#1f1f1f]">
+              <p className="text-[#F5F0E8] font-mono text-xl font-medium mb-1">{activeProject.name}</p>
               {activeProject.estimated_completion && (
                 <p className="text-[#555050] font-mono text-sm">
                   Est. completion:{' '}
@@ -184,7 +186,7 @@ export default async function PortalOverviewPage({
                 </p>
               )}
             </div>
-            <div className="px-6 py-5">
+            <div className="px-6 py-6">
               {/* Progress bar */}
               <div className="flex gap-0.5 mb-2">
                 {PIPELINE_ORDER.map((_, i) => (
@@ -205,11 +207,11 @@ export default async function PortalOverviewPage({
 
           {/* Pending tasks */}
           {(tasksResult.data?.length ?? 0) > 0 && (
-            <div className="border border-[#1A1A1A] rounded-md overflow-hidden">
-              <div className="px-6 py-3 border-b border-[#1A1A1A] bg-[#111111]">
+            <div style={{ ...card, overflow: 'hidden' }}>
+              <div className="px-6 py-3 border-b border-[#1f1f1f]">
                 <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest">Pending items</p>
               </div>
-              <div className="divide-y divide-[#1A1A1A]">
+              <div className="divide-y divide-[#1f1f1f]">
                 {tasksResult.data?.map((t) => (
                   <div key={t.id} className="px-6 py-3 flex items-center gap-3">
                     <div className="w-1.5 h-1.5 bg-[#C9963A] flex-shrink-0 rounded-full" />
@@ -227,11 +229,11 @@ export default async function PortalOverviewPage({
 
           {/* Upcoming events */}
           {(eventsResult.data?.length ?? 0) > 0 && (
-            <div className="border border-[#1A1A1A] rounded-md overflow-hidden">
-              <div className="px-6 py-3 border-b border-[#1A1A1A] bg-[#111111]">
+            <div style={{ ...card, overflow: 'hidden' }}>
+              <div className="px-6 py-3 border-b border-[#1f1f1f]">
                 <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest">Upcoming</p>
               </div>
-              <div className="divide-y divide-[#1A1A1A]">
+              <div className="divide-y divide-[#1f1f1f]">
                 {eventsResult.data?.map((ev) => (
                   <div key={ev.id} className="px-6 py-3 flex items-center gap-4">
                     <span className="text-[#555050] font-mono text-xs w-20 flex-shrink-0">
@@ -245,13 +247,13 @@ export default async function PortalOverviewPage({
           )}
         </>
       ) : (
-        <div className="border border-[#1A1A1A] rounded-md px-6 py-10 text-center">
+        <div style={{ ...card, padding: '40px 24px', textAlign: 'center' }}>
           <p className="text-[#555050] font-mono text-sm">No active projects yet.</p>
         </div>
       )}
 
       {/* Contact card */}
-      <div className="border border-[#1A1A1A] rounded-md px-6 py-6">
+      <div style={{ ...card, padding: '24px' }}>
         <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-4">Your project manager</p>
         <p className="text-[#F5F0E8] font-mono text-sm font-semibold mb-4">Ali Harrison — Te Wairama Digital</p>
         <div className="flex flex-col gap-2">
