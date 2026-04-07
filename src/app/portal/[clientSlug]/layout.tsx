@@ -47,8 +47,28 @@ export default async function PortalLayout({
 
   // Check the slug belongs to a real client
   const supabase = await createServiceClient()
-  const { data: exists } = await supabase.from('clients').select('id').eq('slug', clientSlug).single()
+  const { data: exists } = await supabase.from('clients').select('id, name, company, slug').eq('slug', clientSlug).single()
   if (!exists) notFound()
+
+  // Dev bypass — skip auth in local development
+  if (process.env.NODE_ENV === 'development') {
+    const base = `/portal/${clientSlug}`
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] font-mono">
+        <nav className="border-b border-[#1A1A1A] bg-[#0A0A0A] px-6 py-0 flex items-center justify-between sticky top-0 z-40">
+          <Link href={base} className="text-[#F5F0E8] font-mono font-semibold tracking-widest uppercase text-sm py-4">
+            AWA/OS
+          </Link>
+          <PortalNav base={base} />
+          <div className="flex items-center gap-4">
+            <span className="text-[#555050] font-mono text-xs">{exists.company ?? exists.name}</span>
+            <span className="text-[#2A2A2A] font-mono text-[10px]">[dev]</span>
+          </div>
+        </nav>
+        <main className="max-w-3xl mx-auto px-6 py-8">{children}</main>
+      </div>
+    )
+  }
 
   const client = await getPortalClient(clientSlug)
   if (!client) redirect(`/portal/login?slug=${clientSlug}`)
