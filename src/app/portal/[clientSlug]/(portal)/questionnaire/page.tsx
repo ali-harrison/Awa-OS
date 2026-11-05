@@ -1,7 +1,5 @@
-import { cookies } from 'next/headers'
-import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
-import { PORTAL_COOKIE } from '@/lib/portal/auth'
+import { getLatestProject, requirePortalClient } from '@/lib/portal/auth'
 import { QuestionnaireForm } from './QuestionnaireForm'
 import type { QuestionnaireTemplate, QuestionnaireResponse } from '@/types'
 
@@ -10,33 +8,10 @@ export default async function QuestionnairePage({
 }: {
   params: Promise<{ clientSlug: string }>
 }) {
-  await params
-  const cookieStore = await cookies()
-  const raw = cookieStore.get(PORTAL_COOKIE)?.value
-  if (!raw) notFound()
-
-  let session: { clientId: string }
-  try { session = JSON.parse(raw) } catch { notFound() }
-
-  const supabase = await createServiceClient()
-
-  // Get client type
-  const { data: client } = await supabase
-    .from('clients')
-    .select('type')
-    .eq('id', session.clientId)
-    .single()
-
-  if (!client) notFound()
-
-  // Get active project
-  const { data: project } = await supabase
-    .from('projects')
-    .select('id, name')
-    .eq('client_id', session.clientId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
+  const { clientSlug } = await params
+  const client = await requirePortalClient(clientSlug)
+  const project = await getLatestProject(client.id)
+  const supabase = createServiceClient()
 
   if (!project) {
     return (
@@ -63,12 +38,14 @@ export default async function QuestionnairePage({
     )
   }
 
-  // Check if already completed
+  // Pick up a saved draft, or show the completed answers
   const { data: existingResponse } = await supabase
     .from('questionnaire_responses')
     .select('*')
     .eq('project_id', project.id)
-    .single()
+    .order('submitted_at', { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle()
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,6 +56,7 @@ export default async function QuestionnairePage({
       <QuestionnaireForm
         template={template as QuestionnaireTemplate}
         projectId={project.id}
+        clientSlug={clientSlug}
         existingResponse={existingResponse as QuestionnaireResponse | null}
       />
     </div>

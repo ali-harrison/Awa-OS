@@ -3,7 +3,7 @@ import { HTMLAttributes } from 'react'
 
 interface HeaderProps extends HTMLAttributes<HTMLDivElement> {
   title: string
-  subtitle?: string
+  subtitle?: React.ReactNode
   actions?: React.ReactNode
   backHref?: string
   backLabel?: string

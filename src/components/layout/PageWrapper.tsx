@@ -28,15 +28,3 @@ export function PageWrapper({
     </main>
   )
 }
-
-/** Full-bleed wrapper — no padding, scroll container only */
-export function PageContainer({ className = '', children, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return (
-    <main
-      className={['flex-1 overflow-y-auto bg-[#0A0A0A] flex flex-col', className].join(' ')}
-      {...props}
-    >
-      {children}
-    </main>
-  )
-}

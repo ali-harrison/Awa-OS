@@ -2,36 +2,29 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { FinancesClient } from './FinancesClient'
-import type { Client, Invoice, Project } from '@/types'
+import { displayStatus } from '@/lib/invoices'
+import { nzDate } from '@/lib/format'
+import { CLIENT_COLUMNS, type Client, type Invoice, type Project } from '@/types'
 
 export default async function FinancesPage() {
   const supabase = await createClient()
-
-  const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
   const [{ data: invoices }, { data: clients }, { data: projects }] = await Promise.all([
     supabase
       .from('invoices')
       .select('*')
       .order('created_at', { ascending: false }),
-    supabase.from('clients').select('*').order('name'),
+    supabase.from('clients').select(CLIENT_COLUMNS).order('name'),
     supabase.from('projects').select('id, name, client_id').order('name'),
   ])
 
   const inv = (invoices ?? []) as Invoice[]
+  const thisMonth = nzDate().slice(0, 7)
+  const total = (list: Invoice[]) => list.reduce((s, i) => s + i.amount, 0)
 
-  const revenueMTD = inv
-    .filter((i) => i.status === 'paid' && i.paid_at && i.paid_at >= startOfMonth)
-    .reduce((s, i) => s + i.amount, 0)
-
-  const outstanding = inv
-    .filter((i) => i.status === 'sent')
-    .reduce((s, i) => s + i.amount, 0)
-
-  const overdue = inv
-    .filter((i) => i.status === 'sent' && i.due_date && i.due_date < now.toISOString())
-    .reduce((s, i) => s + i.amount, 0)
+  const revenueMTD = total(inv.filter((i) => i.status === 'paid' && i.paid_at && nzDate(i.paid_at).startsWith(thisMonth)))
+  const outstanding = total(inv.filter((i) => ['sent', 'overdue'].includes(displayStatus(i))))
+  const overdue = total(inv.filter((i) => displayStatus(i) === 'overdue'))
 
   return (
     <>
@@ -42,7 +35,7 @@ export default async function FinancesPage() {
             revenueMTD,
             outstanding,
             overdue,
-            invoices: inv as (Invoice & { client: Pick<Client, 'id' | 'name' | 'company'> })[],
+            invoices: inv,
             clients: (clients ?? []) as Client[],
             projects: (projects ?? []) as Project[],
           }}

@@ -1,16 +1,17 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
-import { getResend, FROM_ADDRESS } from '@/lib/resend/client'
-import { templates } from '@/lib/resend/templates'
+import { requireUser } from '@/lib/supabase/server'
+import { deliverTemplate } from '@/lib/resend/deliver'
 import { logActivity } from '@/lib/logger'
 import type { ProjectTier, ProjectStatus } from '@/types'
 
-export async function createProjectAction(
-  _prev: { error: string } | null,
-  formData: FormData
-): Promise<{ error: string } | null> {
+/** `created` means the project exists even though something went wrong, so the form mustn't offer to create it again. */
+export type CreateProjectResult = { error: string; created?: boolean } | null
+
+export async function createProjectAction(formData: FormData): Promise<CreateProjectResult> {
+  const { supabase } = await requireUser()
+
   const clientId = formData.get('client_id') as string
   const name = formData.get('name') as string
   const tier = (formData.get('tier') as ProjectTier) || null
@@ -22,9 +23,6 @@ export async function createProjectAction(
 
   if (!clientId || !name) return { error: 'Client and project name are required.' }
 
-  const supabase = await createClient()
-
-  // Insert project
   const { data: project, error: projectError } = await supabase
     .from('projects')
     .insert({
@@ -42,77 +40,40 @@ export async function createProjectAction(
 
   if (projectError || !project) return { error: projectError?.message ?? 'Failed to create project.' }
 
-  // Trigger automated onboarding flow
-  if (status === 'onboarding') {
-    const { data: client } = await supabase
-      .from('clients')
-      .select('name, email, slug')
-      .eq('id', clientId)
-      .single()
+  await logActivity({ type: 'audit', entity: 'project', entity_id: project.id, action: 'created', meta: { name, client_id: clientId } })
+  revalidatePath('/projects')
 
-    if (client) {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
-      const portalUrl = `${baseUrl}/portal/${client.slug}`
-      const questionnaireUrl = `${baseUrl}/portal/${client.slug}/questionnaire`
+  if (status !== 'onboarding') return null
 
-      // Send welcome email
-      const welcomeResult = await getResend().emails.send({
-        from: FROM_ADDRESS,
-        to: client.email,
-        subject: templates.welcome_client.subject({ clientName: client.name, projectName: name, portalUrl }),
-        html: templates.welcome_client.html({ clientName: client.name, projectName: name, portalUrl }),
-      })
+  // Automated onboarding: portal setup link, then the questionnaire
+  const { data: client } = await supabase
+    .from('clients')
+    .select('id, name, email, slug')
+    .eq('id', clientId)
+    .single()
 
-      await supabase.from('email_log').insert({
-        client_id: clientId,
-        project_id: project.id,
-        template_key: 'welcome_client',
-        subject: templates.welcome_client.subject({ clientName: client.name, projectName: name, portalUrl }),
-        sent_at: new Date().toISOString(),
-        status: welcomeResult.error ? 'failed' : 'sent',
-      })
+  if (!client) return null
 
-      // Send questionnaire link email
-      const questionnaireResult = await getResend().emails.send({
-        from: FROM_ADDRESS,
-        to: client.email,
-        subject: templates.questionnaire_link.subject({ clientName: client.name, projectName: name, questionnaireUrl }),
-        html: templates.questionnaire_link.html({ clientName: client.name, projectName: name, questionnaireUrl }),
-      })
+  const vars = { clientName: client.name, projectName: name }
+  const email = { client, projectId: project.id, vars }
 
-      await supabase.from('email_log').insert({
-        client_id: clientId,
-        project_id: project.id,
-        template_key: 'questionnaire_link',
-        subject: templates.questionnaire_link.subject({ clientName: client.name, projectName: name, questionnaireUrl }),
-        sent_at: new Date().toISOString(),
-        status: questionnaireResult.error ? 'failed' : 'sent',
-      })
+  const welcome = await deliverTemplate({ ...email, templateKey: 'welcome_client' })
+  const questionnaire = welcome.error
+    ? welcome
+    : await deliverTemplate({ ...email, templateKey: 'questionnaire_link' })
 
-      // Update status to questionnaire_sent
-      await supabase
-        .from('projects')
-        .update({ status: 'questionnaire_sent', stage_updated_at: new Date().toISOString() })
-        .eq('id', project.id)
-
-      await logActivity({ type: 'email', entity: 'project', entity_id: project.id, action: 'sent', meta: { to: client.email, subject: 'welcome_client + questionnaire_link', template: 'onboarding' } })
+  if (questionnaire.error) {
+    return {
+      created: true,
+      error: `Project created, but the onboarding emails didn't send (${questionnaire.error.replace(/\.+$/, '')}). It's still at Onboarding — send them from the Emails page.`,
     }
   }
 
-  await logActivity({ type: 'audit', entity: 'project', entity_id: project.id, action: 'created', meta: { name, client_id: clientId } })
+  await supabase
+    .from('projects')
+    .update({ status: 'questionnaire_sent', stage_updated_at: new Date().toISOString() })
+    .eq('id', project.id)
 
   revalidatePath('/projects')
   return null
-}
-
-export async function updateProjectStatusAction(id: string, status: ProjectStatus) {
-  const supabase = await createClient()
-  const { data: existing } = await supabase.from('projects').select('status').eq('id', id).single()
-  await supabase
-    .from('projects')
-    .update({ status, stage_updated_at: new Date().toISOString() })
-    .eq('id', id)
-  await logActivity({ type: 'change', entity: 'project', entity_id: id, action: 'status_changed', meta: { field: 'status', old_value: existing?.status ?? null, new_value: status } })
-  revalidatePath('/projects')
-  revalidatePath(`/projects/${id}`)
 }

@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { ProjectsClient } from './ProjectsClient'
-import type { Client, Project } from '@/types'
+import { CLIENT_COLUMNS, type Client, type Project } from '@/types'
 
 export default async function ProjectsPage({
   searchParams,
@@ -17,7 +17,7 @@ export default async function ProjectsPage({
       .from('projects')
       .select('*, client:clients(id, name, company)')
       .order('created_at', { ascending: false }),
-    supabase.from('clients').select('*').order('name'),
+    supabase.from('clients').select(CLIENT_COLUMNS).order('name'),
   ])
 
   return (

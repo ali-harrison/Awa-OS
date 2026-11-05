@@ -1,65 +1,30 @@
 'use client'
 
-import { useState, useActionState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/Input'
 import { SlideOver } from '@/components/ui/SlideOver'
 import { createClientAction } from './actions'
-import type { Client, ClientType, ClientStatus } from '@/types'
-
-const TYPE_OPTIONS: { value: ClientType; label: string }[] = [
-  { value: 'charity', label: 'Charity / NFP' },
-  { value: 'gym', label: 'Gym / Fitness' },
-  { value: 'consultant', label: 'Consultant' },
-  { value: 'ecom', label: 'E-Commerce' },
-  { value: 'other', label: 'Other' },
-]
-
-const STATUS_OPTIONS: { value: ClientStatus; label: string }[] = [
-  { value: 'lead', label: 'Lead' },
-  { value: 'prospect', label: 'Prospect' },
-  { value: 'active', label: 'Active' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'paused', label: 'Paused' },
-]
+import { useFormSubmit } from '@/lib/use-form-submit'
+import { formatDate } from '@/lib/format'
+import { CLIENT_STATUS_OPTIONS, CLIENT_TYPE_OPTIONS, type Client, type ClientType } from '@/types'
 
 function NewClientForm({ onSuccess }: { onSuccess: () => void }) {
-  const [state, formAction, pending] = useActionState(createClientAction, null)
-
-  // Close on successful submission
-  if (state === null && !pending) {
-    // State is null = no error = success after first render — handled by redirect/revalidate
-  }
+  const { onSubmit, error, pending } = useFormSubmit(createClientAction, onSuccess)
 
   return (
-    <form
-      action={async (fd) => {
-        const result = await createClientAction(null, fd)
-        if (!result) onSuccess()
-      }}
-      className="flex flex-col gap-4"
-    >
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <Input label="Name" name="name" required placeholder="Aroha Ngata" />
       <Input label="Email" name="email" type="email" required placeholder="aroha@example.co.nz" />
       <Input label="Phone" name="phone" type="tel" placeholder="+64 21 000 0000" />
       <Input label="Company" name="company" placeholder="KIHI Charitable Trust" />
-      <Select
-        label="Type"
-        name="type"
-        defaultValue="other"
-        options={[{ value: '', label: 'Select type…' }, ...TYPE_OPTIONS]}
-      />
-      <Select
-        label="Status"
-        name="status"
-        defaultValue="lead"
-        options={STATUS_OPTIONS}
-      />
-      {state?.error && (
+      <Select label="Type" name="type" defaultValue="other" options={CLIENT_TYPE_OPTIONS} />
+      <Select label="Status" name="status" defaultValue="lead" options={CLIENT_STATUS_OPTIONS} />
+      {error && (
         <p className="text-[#E05252] font-mono text-xs border border-[#E0525233] bg-[#E0525211] px-3 py-2">
-          {state.error}
+          {error}
         </p>
       )}
       <div className="pt-2 flex gap-2">
@@ -120,7 +85,7 @@ export function ClientsClient({ clients }: { clients: Client[] }) {
                   : <span className="text-[#555050]">off</span>}
               </span>
               <p className="text-[#555050] font-mono text-xs">
-                {new Date(client.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+                {formatDate(client.created_at)}
               </p>
             </Link>
           ))}

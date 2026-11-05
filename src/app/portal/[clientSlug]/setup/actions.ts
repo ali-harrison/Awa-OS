@@ -1,9 +1,8 @@
 'use server'
 
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
-import { validatePortalToken, PORTAL_COOKIE, PORTAL_COOKIE_MAX_AGE } from '@/lib/portal/auth'
+import { setPortalSession, validatePortalToken } from '@/lib/portal/auth'
 import { hashPassword } from '@/lib/portal/password'
 
 export async function setupPasswordAction(
@@ -26,30 +25,20 @@ export async function setupPasswordAction(
     return { error: 'This setup link has expired. Please request a new one.' }
   }
 
-  const hash = await hashPassword(password)
-  const supabase = await createServiceClient()
-  await supabase
+  // One update, so the token is only burned if the password actually saved
+  const { error } = await createServiceClient()
     .from('clients')
-    .update({ portal_password_hash: hash })
+    .update({
+      portal_password_hash: await hashPassword(password),
+      portal_token: null,
+      portal_token_expires_at: null,
+    })
     .eq('id', client.id)
 
-  // Burn the token — one-time use only
-  await supabase
-    .from('clients')
-    .update({ portal_token: null, portal_token_expires_at: null })
-    .eq('id', client.id)
+  if (error) {
+    return { error: 'Something went wrong saving your password. Please try again.' }
+  }
 
-  // Set session cookie and clear the temporary setup cookie
-  const session = JSON.stringify({ clientId: client.id, clientSlug: client.slug })
-  const cookieStore = await cookies()
-  cookieStore.set('portal_setup_token', '', { maxAge: 0, path: '/portal' })
-  cookieStore.set(PORTAL_COOKIE, session, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: PORTAL_COOKIE_MAX_AGE,
-    path: '/portal',
-  })
-
+  await setPortalSession({ clientId: client.id, clientSlug: client.slug })
   redirect(`/portal/${client.slug}`)
 }

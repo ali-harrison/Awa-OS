@@ -15,7 +15,7 @@ export function PortalNav({ base }: { base: string }) {
   const pathname = usePathname()
 
   return (
-    <div className="flex items-center gap-0">
+    <div className="flex items-center gap-0 order-last w-full overflow-x-auto md:order-none md:w-auto">
       {NAV_ITEMS.map(({ href, label }) => {
         const fullHref = `${base}${href}`
         const isActive = href === ''
@@ -27,7 +27,7 @@ export function PortalNav({ base }: { base: string }) {
             key={label}
             href={fullHref}
             className={[
-              'px-4 py-4 font-mono text-xs uppercase tracking-widest transition-colors duration-150 border-b-2',
+              'px-4 py-4 font-mono text-xs uppercase tracking-widest whitespace-nowrap transition-colors duration-150 border-b-2',
               isActive
                 ? 'text-[#f0ece3] border-[#f59e0b]'
                 : 'text-[#555555] hover:text-[#f0ece3] border-transparent',

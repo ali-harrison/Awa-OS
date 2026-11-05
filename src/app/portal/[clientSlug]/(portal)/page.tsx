@@ -1,9 +1,9 @@
-import { cookies } from 'next/headers'
-import { notFound } from 'next/navigation'
-import { createServiceClient } from '@/lib/supabase/server'
 import { Mail, MessageCircle } from 'lucide-react'
-import { PORTAL_COOKIE } from '@/lib/portal/auth'
-import type { ProjectStatus } from '@/types'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requirePortalClient } from '@/lib/portal/auth'
+import { formatDate, formatNZD } from '@/lib/format'
+import { displayStatus } from '@/lib/invoices'
+import { PROJECT_STAGES, type InvoiceStatus, type ProjectStatus } from '@/types'
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   onboarding: 'Getting started',
@@ -18,67 +18,24 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   complete: 'Complete',
 }
 
-const STATUS_COLOURS: Record<ProjectStatus, string> = {
-  onboarding: '#8A8580',
-  questionnaire_sent: '#C9963A',
-  questionnaire_received: '#C9963A',
-  proposal_sent: '#C9963A',
-  contract_sent: '#C9963A',
-  deposit_pending: '#C9963A',
-  deposit_paid: '#4CAF7D',
-  in_progress: '#4CAF7D',
-  review: '#C9963A',
-  complete: '#4CAF7D',
-}
-
-const PIPELINE_ORDER: ProjectStatus[] = [
-  'onboarding', 'questionnaire_sent', 'questionnaire_received',
-  'proposal_sent', 'contract_sent', 'deposit_pending',
-  'deposit_paid', 'in_progress', 'review', 'complete',
-]
-
-function formatNZD(cents: number) {
-  return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', minimumFractionDigits: 0 }).format(cents / 100)
-}
-
 export default async function PortalOverviewPage({
   params,
 }: {
   params: Promise<{ clientSlug: string }>
 }) {
   const { clientSlug } = await params
-  const cookieStore = await cookies()
-  const raw = cookieStore.get(PORTAL_COOKIE)?.value
-
-  // dev bypass — session may be missing in development
-  let clientId: string | null = null
-  if (raw) {
-    try { clientId = JSON.parse(raw).clientId } catch { /* ignore */ }
-  }
-
-  const supabase = await createServiceClient()
-
-  // In dev with no session, look up client by slug
-  let resolvedClientId = clientId
-  if (!resolvedClientId) {
-    const { data: bySlug } = await supabase.from('clients').select('id').eq('slug', clientSlug).single()
-    if (!bySlug) notFound()
-    resolvedClientId = bySlug.id
-  }
+  const client = await requirePortalClient(clientSlug)
+  const supabase = createServiceClient()
 
   const [
-    { data: client },
     { data: projects },
     { data: invoices },
     { data: files },
   ] = await Promise.all([
-    supabase.from('clients').select('id, name, company').eq('id', resolvedClientId).single(),
-    supabase.from('projects').select('id, name, status, estimated_completion').eq('client_id', resolvedClientId).order('created_at', { ascending: false }),
-    supabase.from('invoices').select('id, amount, status').eq('client_id', resolvedClientId).neq('status', 'draft'),
-    supabase.from('files').select('id').eq('client_id', resolvedClientId),
+    supabase.from('projects').select('id, name, status, estimated_completion').eq('client_id', client.id).order('created_at', { ascending: false }),
+    supabase.from('invoices').select('id, amount, status, due_date').eq('client_id', client.id).neq('status', 'draft'),
+    supabase.from('files').select('id').eq('client_id', client.id),
   ])
-
-  if (!client) notFound()
 
   const activeProject = projects?.[0]
 
@@ -90,14 +47,14 @@ export default async function PortalOverviewPage({
       ? supabase.from('calendar_events').select('*').eq('project_id', activeProject.id).eq('visible_to_client', true).gte('start_at', new Date().toISOString()).order('start_at').limit(5)
       : Promise.resolve({ data: [] }),
     activeProject
-      ? supabase.from('questionnaire_responses').select('id, completed').eq('project_id', activeProject.id).maybeSingle()
+      ? supabase.from('questionnaire_responses').select('id, completed').eq('project_id', activeProject.id).order('submitted_at', { ascending: false, nullsFirst: false }).limit(1).maybeSingle()
       : Promise.resolve({ data: null }),
   ])
 
-  const currentStep = activeProject ? PIPELINE_ORDER.indexOf(activeProject.status as ProjectStatus) : 0
-  const totalSteps = PIPELINE_ORDER.length
+  const currentStep = activeProject ? PROJECT_STAGES.indexOf(activeProject.status as ProjectStatus) : 0
+  const totalSteps = PROJECT_STAGES.length
 
-  const unpaidInvoices = invoices?.filter((i) => i.status === 'sent' || i.status === 'overdue') ?? []
+  const unpaidInvoices = invoices?.filter((i) => ['sent', 'overdue'].includes(displayStatus({ status: i.status as InvoiceStatus, due_date: i.due_date }))) ?? []
   const outstandingTotal = unpaidInvoices.reduce((s, i) => s + i.amount, 0)
   const questionnaireComplete = questionnaireResult.data?.completed === true
   const fileCount = files?.length ?? 0
@@ -123,10 +80,10 @@ export default async function PortalOverviewPage({
       </div>
 
       {/* Stat blocks */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-[2fr_1fr_1fr_1.6fr] gap-3">
 
-        {/* Status */}
-        <div style={{ ...card, padding: '20px 24px' }}>
+        {/* Status — the long labels need the room */}
+        <div className="col-span-2 md:col-span-1 min-w-0" style={{ ...card, padding: '20px 24px' }}>
           <p style={{ margin: '0 0 10px', fontFamily: 'monospace', fontSize: 10, color: '#555555', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Status</p>
           <p style={{ margin: 0, fontFamily: 'monospace', fontSize: 24, fontWeight: 500, color: '#f0ece3' }}>
             {activeProject ? STATUS_LABELS[activeProject.status as ProjectStatus] : 'No project'}
@@ -134,7 +91,7 @@ export default async function PortalOverviewPage({
         </div>
 
         {/* Invoices */}
-        <div style={{ ...card, padding: '20px 24px' }}>
+        <div className="min-w-0" style={{ ...card, padding: '20px 24px' }}>
           <p style={{ margin: '0 0 10px', fontFamily: 'monospace', fontSize: 10, color: '#555555', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Invoices</p>
           <p style={{ margin: '0 0 4px', fontFamily: 'monospace', fontSize: 24, fontWeight: 500, color: '#f0ece3' }}>
             {invoiceCount}
@@ -149,7 +106,7 @@ export default async function PortalOverviewPage({
         </div>
 
         {/* Files */}
-        <div style={{ ...card, padding: '20px 24px' }}>
+        <div className="min-w-0" style={{ ...card, padding: '20px 24px' }}>
           <p style={{ margin: '0 0 10px', fontFamily: 'monospace', fontSize: 10, color: '#555555', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Files</p>
           <p style={{ margin: '0 0 4px', fontFamily: 'monospace', fontSize: 24, fontWeight: 500, color: '#f0ece3' }}>
             {fileCount}
@@ -160,7 +117,7 @@ export default async function PortalOverviewPage({
         </div>
 
         {/* Questionnaire */}
-        <div style={{ ...card, padding: '20px 24px' }}>
+        <div className="col-span-2 md:col-span-1 min-w-0" style={{ ...card, padding: '20px 24px' }}>
           <p style={{ margin: '0 0 10px', fontFamily: 'monospace', fontSize: 10, color: '#555555', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Questionnaire</p>
           <p style={{ margin: 0, fontFamily: 'monospace', fontSize: 24, fontWeight: 500, color: questionnaireComplete ? '#4CAF7D' : '#C9963A' }}>
             {questionnaireComplete ? 'Complete ✓' : 'Awaiting'}
@@ -179,9 +136,7 @@ export default async function PortalOverviewPage({
                 <p className="text-[#555050] font-mono text-sm">
                   Est. completion:{' '}
                   <span className="text-[#8A8580]">
-                    {new Date(activeProject.estimated_completion).toLocaleDateString('en-NZ', {
-                      day: 'numeric', month: 'long', year: 'numeric',
-                    })}
+                    {formatDate(activeProject.estimated_completion, 'long')}
                   </span>
                 </p>
               )}
@@ -189,7 +144,7 @@ export default async function PortalOverviewPage({
             <div className="px-6 py-6">
               {/* Progress bar */}
               <div className="flex gap-0.5 mb-2">
-                {PIPELINE_ORDER.map((_, i) => (
+                {PROJECT_STAGES.map((_, i) => (
                   <div
                     key={i}
                     className="flex-1 transition-colors duration-300"
@@ -218,7 +173,7 @@ export default async function PortalOverviewPage({
                     <p className="text-[#F5F0E8] font-mono text-sm">{t.title}</p>
                     {t.due_date && (
                       <span className="text-[#555050] font-mono text-xs ml-auto">
-                        {new Date(t.due_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+                        {formatDate(t.due_date)}
                       </span>
                     )}
                   </div>
@@ -237,7 +192,7 @@ export default async function PortalOverviewPage({
                 {eventsResult.data?.map((ev) => (
                   <div key={ev.id} className="px-6 py-3 flex items-center gap-4">
                     <span className="text-[#555050] font-mono text-xs w-20 flex-shrink-0">
-                      {new Date(ev.start_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+                      {formatDate(ev.start_at)}
                     </span>
                     <p className="text-[#F5F0E8] font-mono text-sm">{ev.title}</p>
                   </div>
@@ -264,16 +219,18 @@ export default async function PortalOverviewPage({
             <Mail size={14} className="flex-shrink-0" />
             ali@tewairama.digital
           </a>
-          <a
-            href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? ''}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 font-mono text-sm transition-colors duration-150"
-            style={{ color: '#C9963A' }}
-          >
-            <MessageCircle size={14} className="flex-shrink-0" />
-            WhatsApp →
-          </a>
+          {process.env.NEXT_PUBLIC_WHATSAPP_NUMBER && (
+            <a
+              href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 font-mono text-sm transition-colors duration-150"
+              style={{ color: '#C9963A' }}
+            >
+              <MessageCircle size={14} className="flex-shrink-0" />
+              WhatsApp →
+            </a>
+          )}
         </div>
       </div>
 

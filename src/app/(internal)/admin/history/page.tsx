@@ -1,6 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
+import { Header } from '@/components/layout/Header'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { ActivityFeed } from './ActivityFeed'
+
+const LOG_TYPES = ['email', 'audit', 'change'] as const
+type LogType = (typeof LOG_TYPES)[number]
 
 export default async function HistoryPage({
   searchParams,
@@ -8,8 +12,8 @@ export default async function HistoryPage({
   searchParams: Promise<{ type?: string; page?: string }>
 }) {
   const { type, page } = await searchParams
-  const activeType = (type as 'email' | 'audit' | 'change') ?? null
-  const currentPage = Math.max(1, parseInt(page ?? '1', 10))
+  const activeType = LOG_TYPES.find((t): t is LogType => t === type) ?? null
+  const currentPage = Math.max(1, parseInt(page ?? '1', 10) || 1)
   const pageSize = 20
   const offset = (currentPage - 1) * pageSize
 
@@ -30,13 +34,16 @@ export default async function HistoryPage({
   const totalPages = Math.ceil((count ?? 0) / pageSize)
 
   return (
-    <PageWrapper title="Activity Log">
-      <ActivityFeed
-        logs={logs ?? []}
-        activeType={activeType}
-        currentPage={currentPage}
-        totalPages={totalPages}
-      />
-    </PageWrapper>
+    <>
+      <Header title="History" subtitle="Emails, audit trail & changes" />
+      <PageWrapper>
+        <ActivityFeed
+          logs={logs ?? []}
+          activeType={activeType}
+          currentPage={currentPage}
+          totalPages={totalPages}
+        />
+      </PageWrapper>
+    </>
   )
 }

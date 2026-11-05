@@ -1,21 +1,17 @@
 'use client'
 
-import { useState, useActionState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Select, Textarea } from '@/components/ui/Input'
 import { SlideOver } from '@/components/ui/SlideOver'
 import { createCalendarEventAction, deleteCalendarEventAction } from './actions'
+import { useFormSubmit } from '@/lib/use-form-submit'
+import { localInputToISO } from '@/lib/format'
+import { EVENT_TYPE_OPTIONS } from '@/types'
 import type { CalendarEvent, Project, CalendarEventType } from '@/types'
 
 type ViewMode = 'month' | 'week'
-
-const EVENT_TYPE_OPTIONS: { value: CalendarEventType; label: string }[] = [
-  { value: 'deadline', label: 'Deadline' },
-  { value: 'meeting', label: 'Meeting' },
-  { value: 'milestone', label: 'Milestone' },
-  { value: 'reminder', label: 'Reminder' },
-]
 
 const eventColors: Record<CalendarEventType, string> = {
   deadline: 'bg-[#C9963A11] text-[#C9963A] border-[#C9963A33]',
@@ -45,13 +41,11 @@ function formatMonthYear(date: Date) {
 
 function MonthView({
   events,
-  projects,
   currentDate,
   onDayClick,
   onEventClick,
 }: {
   events: (CalendarEvent & { project?: Pick<Project, 'name'> | null })[]
-  projects: Project[]
   currentDate: Date
   onDayClick: (date: Date) => void
   onEventClick: (event: CalendarEvent) => void
@@ -219,7 +213,11 @@ function CreateEventForm({
   defaultDate: Date | null
   onSuccess: () => void
 }) {
-  const [state, formAction, pending] = useActionState(createCalendarEventAction, null)
+  const { onSubmit, error, pending } = useFormSubmit((fd) => {
+    fd.set('start_at', localInputToISO(fd.get('start_at') as string))
+    fd.set('end_at', localInputToISO(fd.get('end_at') as string))
+    return createCalendarEventAction(fd)
+  }, onSuccess)
 
   const defaultStart = defaultDate
     ? `${defaultDate.getFullYear()}-${String(defaultDate.getMonth() + 1).padStart(2, '0')}-${String(defaultDate.getDate()).padStart(2, '0')}T09:00`
@@ -229,13 +227,7 @@ function CreateEventForm({
     : ''
 
   return (
-    <form
-      action={async (fd) => {
-        const result = await createCalendarEventAction(null, fd)
-        if (!result) onSuccess()
-      }}
-      className="flex flex-col gap-4"
-    >
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <Input name="title" label="Title" required />
       <Select name="type" label="Type" defaultValue="milestone" options={EVENT_TYPE_OPTIONS} />
       <Select
@@ -257,8 +249,8 @@ function CreateEventForm({
           Visible to client
         </label>
       </div>
-      {state?.error && (
-        <p className="text-[#E05252] font-mono text-xs">{state.error}</p>
+      {error && (
+        <p className="text-[#E05252] font-mono text-xs">{error}</p>
       )}
       <Button type="submit" loading={pending}>Add event</Button>
     </form>
@@ -287,7 +279,7 @@ function EventDetail({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Badge variant={event.type as 'deadline' | 'meeting' | 'milestone' | 'reminder'}>{event.type}</Badge>
+        <Badge variant={event.type}>{event.type}</Badge>
         <p className="text-[#F5F0E8] font-mono text-base font-medium mt-2">{event.title}</p>
         {projectName && (
           <p className="text-[#555050] font-mono text-xs mt-1">{projectName}</p>
@@ -334,6 +326,13 @@ function EventDetail({
 
 type WithProject = CalendarEvent & { project?: Pick<Project, 'id' | 'name'> | null }
 
+const subscribeToNothing = () => () => {}
+
+/** False during server render and hydration. The grid depends on the browser's "today" and time zone, so it can only render client-side. */
+function useHasMounted() {
+  return useSyncExternalStore(subscribeToNothing, () => true, () => false)
+}
+
 export function CalendarClient({
   events,
   projects,
@@ -341,20 +340,22 @@ export function CalendarClient({
   events: WithProject[]
   projects: Project[]
 }) {
+  const mounted = useHasMounted()
   const [view, setView] = useState<ViewMode>('month')
-  const [currentDate, setCurrentDate] = useState(new Date())
+  const [currentDate, setCurrentDate] = useState(() => new Date())
   const [createOpen, setCreateOpen] = useState(false)
   const [defaultDate, setDefaultDate] = useState<Date | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<WithProject | null>(null)
 
   function navigate(dir: -1 | 1) {
-    const d = new Date(currentDate)
     if (view === 'month') {
-      d.setMonth(d.getMonth() + dir)
+      // Via the 1st: Jan 31 + 1 month would otherwise roll over into March
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + dir, 1))
     } else {
+      const d = new Date(currentDate)
       d.setDate(d.getDate() + dir * 7)
+      setCurrentDate(d)
     }
-    setCurrentDate(d)
   }
 
   function handleDayClick(date: Date) {
@@ -363,6 +364,8 @@ export function CalendarClient({
   }
 
   const projectMap = Object.fromEntries(projects.map((p) => [p.id, p]))
+
+  if (!mounted) return <div className="min-h-[640px]" />
 
   return (
     <>
@@ -416,7 +419,6 @@ export function CalendarClient({
         {view === 'month' ? (
           <MonthView
             events={events}
-            projects={projects}
             currentDate={currentDate}
             onDayClick={handleDayClick}
             onEventClick={(ev) => setSelectedEvent(ev as WithProject)}

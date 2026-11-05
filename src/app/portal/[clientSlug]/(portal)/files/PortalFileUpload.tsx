@@ -2,18 +2,12 @@
 
 import { useState, useRef } from 'react'
 import { Upload } from 'lucide-react'
-import { createFileRecordAction } from '@/app/(internal)/projects/[id]/actions'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { FILES_BUCKET } from '@/lib/storage'
+import { createPortalUploadAction, recordPortalUploadAction } from './actions'
 
-export function PortalFileUpload({
-  projectId,
-  clientSlug,
-  clientId,
-}: {
-  projectId: string
-  clientSlug: string
-  clientId: string
-}) {
+export function PortalFileUpload({ clientSlug }: { clientSlug: string }) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -24,29 +18,26 @@ export function PortalFileUpload({
     setUploading(true)
     setError(null)
     try {
-      const { createBrowserClient } = await import('@supabase/ssr')
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
-      const path = `${clientSlug}/${projectId}/client_uploads/${file.name}`
-      const { error: uploadError } = await supabase.storage
-        .from('project-files')
-        .upload(path, file, { upsert: true })
+      const ticket = await createPortalUploadAction(clientSlug, file.name)
+      if ('error' in ticket) {
+        setError(ticket.error)
+        return
+      }
+
+      const { error: uploadError } = await createClient()
+        .storage.from(FILES_BUCKET)
+        .uploadToSignedUrl(ticket.path, ticket.token, file)
 
       if (uploadError) {
         setError(uploadError.message)
         return
       }
 
-      await createFileRecordAction({
-        projectId,
-        clientId,
-        name: file.name,
-        type: 'other',
-        storagePath: path,
-        uploadedBy: 'client',
-      })
+      const saved = await recordPortalUploadAction(clientSlug, ticket.path, file.name)
+      if (saved.error) {
+        setError(saved.error)
+        return
+      }
 
       router.refresh()
     } catch {

@@ -1,91 +1,105 @@
 'use client'
 
-import { useState, useActionState, useTransition } from 'react'
-import dynamic from 'next/dynamic'
+import { useState, useTransition } from 'react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/Input'
 import { SlideOver } from '@/components/ui/SlideOver'
 import { createInvoiceAction, markInvoicePaidAction, sendInvoiceAction } from './actions'
-import type { Client, Project, Invoice, InvoiceStatus, LineItem } from '@/types'
-
-// Lazy-load PDF button — react-pdf must never touch SSR bundling
-const PDFButton = dynamic(() => import('./PDFButton'), {
-  ssr: false,
-  loading: () => <span className="text-[#555050] font-mono text-xs">…</span>,
-})
-
-function formatNZD(cents: number) {
-  return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', minimumFractionDigits: 2 }).format(cents / 100)
-}
+import { useFormSubmit } from '@/lib/use-form-submit'
+import { formatDate, formatNZD } from '@/lib/format'
+import { displayStatus, gstIncludedIn } from '@/lib/invoices'
+import type { Client, Project, Invoice, LineItem } from '@/types'
 
 // ─── Line item editor ─────────────────────────────────────────────────────────
+
+/** What's in the inputs: raw text, in dollars, so "12." can be typed on the way to "12.50". */
+interface LineItemRow {
+  description: string
+  quantity: string
+  unitPrice: string
+}
+
+const EMPTY_ROW: LineItemRow = { description: '', quantity: '1', unitPrice: '' }
+
+/** Invoices store cents; the form works in dollars. This is the one place they meet. */
+function toLineItem(row: LineItemRow): LineItem {
+  const quantity = parseFloat(row.quantity) || 0
+  const unit_price = Math.round((parseFloat(row.unitPrice) || 0) * 100)
+  return {
+    description: row.description.trim(),
+    quantity,
+    unit_price,
+    amount: Math.round(quantity * unit_price),
+  }
+}
 
 function LineItemEditor({
   value,
   onChange,
 }: {
-  value: LineItem[]
-  onChange: (items: LineItem[]) => void
+  value: LineItemRow[]
+  onChange: (rows: LineItemRow[]) => void
 }) {
-  function updateItem(i: number, field: keyof LineItem, raw: string) {
-    const updated = value.map((li, idx) => {
-      if (idx !== i) return li
-      const next = { ...li, [field]: field === 'description' ? raw : parseFloat(raw) || 0 }
-      next.amount = Math.round(next.quantity * next.unit_price)
-      return next
-    })
-    onChange(updated)
+  function updateRow(i: number, field: keyof LineItemRow, text: string) {
+    onChange(value.map((row, idx) => (idx === i ? { ...row, [field]: text } : row)))
   }
 
-  function addItem() {
-    onChange([...value, { description: '', quantity: 1, unit_price: 0, amount: 0 }])
+  function addRow() {
+    onChange([...value, EMPTY_ROW])
   }
 
-  function removeItem(i: number) {
+  function removeRow(i: number) {
     onChange(value.filter((_, idx) => idx !== i))
   }
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-[1fr_50px_80px_80px_24px] gap-2 px-1">
+      <div className="grid grid-cols-[1fr_50px_90px_90px_24px] gap-2 px-1">
         {['Description', 'Qty', 'Unit $', 'Amount', ''].map((h) => (
           <span key={h} className="text-[#555050] font-mono text-[9px] uppercase tracking-widest">{h}</span>
         ))}
       </div>
-      {value.map((li, i) => (
-        <div key={i} className="grid grid-cols-[1fr_50px_80px_80px_24px] gap-2 items-center">
+      {value.map((row, i) => (
+        <div key={i} className="grid grid-cols-[1fr_50px_90px_90px_24px] gap-2 items-center">
           <input
-            value={li.description}
-            onChange={(e) => updateItem(i, 'description', e.target.value)}
+            aria-label="Description"
+            value={row.description}
+            onChange={(e) => updateRow(i, 'description', e.target.value)}
             placeholder="Service description"
             className="bg-[#111111] text-[#F5F0E8] border border-[#2A2A2A] font-mono text-xs px-2 py-1.5 outline-none focus:border-[#C9963A] transition-colors"
           />
           <input
+            aria-label="Quantity"
             type="number"
-            value={li.quantity}
-            min={1}
-            onChange={(e) => updateItem(i, 'quantity', e.target.value)}
+            value={row.quantity}
+            min={0}
+            step="any"
+            onChange={(e) => updateRow(i, 'quantity', e.target.value)}
             className="bg-[#111111] text-[#F5F0E8] border border-[#2A2A2A] font-mono text-xs px-2 py-1.5 outline-none focus:border-[#C9963A] transition-colors text-right"
           />
           <input
+            aria-label="Unit price in dollars"
             type="number"
-            value={li.unit_price}
+            value={row.unitPrice}
             min={0}
-            onChange={(e) => updateItem(i, 'unit_price', e.target.value)}
+            step="0.01"
+            placeholder="0.00"
+            onChange={(e) => updateRow(i, 'unitPrice', e.target.value)}
             className="bg-[#111111] text-[#F5F0E8] border border-[#2A2A2A] font-mono text-xs px-2 py-1.5 outline-none focus:border-[#C9963A] transition-colors text-right"
           />
-          <span className="text-[#8A8580] font-mono text-xs text-right">{formatNZD(li.amount)}</span>
+          <span className="text-[#8A8580] font-mono text-xs text-right">{formatNZD(toLineItem(row).amount)}</span>
           <button
             type="button"
-            onClick={() => removeItem(i)}
+            aria-label="Remove line"
+            onClick={() => removeRow(i)}
             className="text-[#555050] hover:text-[#E05252] font-mono text-xs cursor-pointer"
           >
             ✕
           </button>
         </div>
       ))}
-      <Button type="button" size="sm" variant="ghost" onClick={addItem}>
+      <Button type="button" size="sm" variant="ghost" onClick={addRow}>
         + Add line
       </Button>
     </div>
@@ -103,35 +117,25 @@ function NewInvoiceForm({
   projects: Project[]
   onSuccess: () => void
 }) {
-  const [, , pending] = useActionState(createInvoiceAction, null)
   const [selectedClientId, setSelectedClientId] = useState('')
-  const [lineItems, setLineItems] = useState<LineItem[]>([
-    { description: '', quantity: 1, unit_price: 0, amount: 0 },
-  ])
+  const [rows, setRows] = useState<LineItemRow[]>([EMPTY_ROW])
   const [gst, setGst] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
-  const subtotal = lineItems.reduce((s, li) => s + li.amount, 0)
-  const gstAmount = gst ? Math.round(subtotal * (15 / 115)) : 0
+  const lineItems = rows.map(toLineItem)
+  const total = lineItems.reduce((s, li) => s + li.amount, 0)
+
+  const { onSubmit, error, pending } = useFormSubmit(async (fd) => {
+    if (lineItems.length === 0) return { error: 'Add at least one line item.' }
+    if (lineItems.some((li) => !li.description)) return { error: 'All line items need a description.' }
+    if (lineItems.some((li) => li.amount <= 0)) return { error: 'All line items need a quantity and a price.' }
+    fd.set('line_items', JSON.stringify(lineItems))
+    return createInvoiceAction(fd)
+  }, onSuccess)
 
   const filteredProjects = projects.filter((p) => p.client_id === selectedClientId)
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (lineItems.some((li) => !li.description)) {
-      setError('All line items need a description.')
-      return
-    }
-    const fd = new FormData(e.currentTarget)
-    fd.set('line_items', JSON.stringify(lineItems))
-    setError(null)
-    const result = await createInvoiceAction(null, fd)
-    if (!result) onSuccess()
-    else setError(result.error)
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <Select
         label="Client"
         name="client_id"
@@ -153,7 +157,7 @@ function NewInvoiceForm({
       />
       <div>
         <p className="text-[#8A8580] font-mono text-xs uppercase tracking-wide mb-2">Line items</p>
-        <LineItemEditor value={lineItems} onChange={setLineItems} />
+        <LineItemEditor value={rows} onChange={setRows} />
       </div>
       <div className="flex items-center justify-between border border-[#1A1A1A] px-3 py-2">
         <div className="flex items-center gap-2">
@@ -170,8 +174,8 @@ function NewInvoiceForm({
           </label>
         </div>
         <div className="text-right">
-          {gst && <p className="text-[#555050] font-mono text-xs">GST: {formatNZD(gstAmount)}</p>}
-          <p className="text-[#F5F0E8] font-mono text-sm font-medium">Total: {formatNZD(subtotal)}</p>
+          {gst && <p className="text-[#555050] font-mono text-xs">Includes GST: {formatNZD(gstIncludedIn(total))}</p>}
+          <p className="text-[#F5F0E8] font-mono text-sm font-medium">Total: {formatNZD(total)}</p>
         </div>
       </div>
       <Input label="Due date" name="due_date" type="date" />
@@ -191,7 +195,7 @@ interface FinancesData {
   revenueMTD: number
   outstanding: number
   overdue: number
-  invoices: (Invoice & { client: Pick<Client, 'id' | 'name' | 'company'> })[]
+  invoices: Invoice[]
   clients: Client[]
   projects: Project[]
 }
@@ -199,8 +203,18 @@ interface FinancesData {
 export function FinancesClient({ data }: { data: FinancesData }) {
   const [open, setOpen] = useState(false)
   const [, startTransition] = useTransition()
+  const [sendingId, setSendingId] = useState<string | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
 
   const clientMap = Object.fromEntries(data.clients.map((c) => [c.id, c]))
+
+  async function handleSend(invoiceId: string) {
+    setSendingId(invoiceId)
+    setSendError(null)
+    const result = await sendInvoiceAction(invoiceId)
+    setSendingId(null)
+    if (result.error) setSendError(result.error)
+  }
 
   return (
     <>
@@ -226,6 +240,12 @@ export function FinancesClient({ data }: { data: FinancesData }) {
         <Button size="sm" onClick={() => setOpen(true)}>+ New Invoice</Button>
       </div>
 
+      {sendError && (
+        <p className="text-[#E05252] font-mono text-xs border border-[#E0525233] bg-[#E0525211] px-3 py-2 mb-4">
+          Invoice not sent: {sendError}
+        </p>
+      )}
+
       {/* Invoices table */}
       {data.invoices.length === 0 ? (
         <div className="border border-[#1A1A1A] px-6 py-12 text-center">
@@ -233,17 +253,18 @@ export function FinancesClient({ data }: { data: FinancesData }) {
         </div>
       ) : (
         <div className="border border-[#1A1A1A]">
-          <div className="grid grid-cols-[140px_1fr_100px_100px_100px_80px] gap-4 px-4 py-2 border-b border-[#1A1A1A] bg-[#0A0A0A]">
+          <div className="grid grid-cols-[140px_1fr_100px_100px_100px_150px] gap-4 px-4 py-2 border-b border-[#1A1A1A] bg-[#0A0A0A]">
             {['Invoice #', 'Client', 'Amount', 'Due', 'Status', ''].map((h) => (
               <span key={h} className="text-[#555050] font-mono text-[10px] uppercase tracking-widest">{h}</span>
             ))}
           </div>
           {data.invoices.map((inv) => {
             const client = clientMap[inv.client_id]
+            const status = displayStatus(inv)
             return (
               <div
                 key={inv.id}
-                className="grid grid-cols-[140px_1fr_100px_100px_100px_80px] gap-4 px-4 py-3 border-b border-[#1A1A1A] last:border-b-0 hover:bg-[#111111] transition-colors items-center"
+                className="grid grid-cols-[140px_1fr_100px_100px_100px_150px] gap-4 px-4 py-3 border-b border-[#1A1A1A] last:border-b-0 hover:bg-[#111111] transition-colors items-center"
               >
                 <p className="text-[#F5F0E8] font-mono text-sm">{inv.invoice_number}</p>
                 <div>
@@ -254,18 +275,17 @@ export function FinancesClient({ data }: { data: FinancesData }) {
                 </div>
                 <p className="text-[#F5F0E8] font-mono text-sm">{formatNZD(inv.amount)}</p>
                 <p className="text-[#8A8580] font-mono text-xs">
-                  {inv.due_date
-                    ? new Date(inv.due_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })
-                    : '—'}
+                  {inv.due_date ? formatDate(inv.due_date) : '—'}
                 </p>
-                <Badge variant={inv.status as InvoiceStatus}>{inv.status}</Badge>
+                <Badge variant={status}>{status}</Badge>
                 <div className="flex items-center gap-2">
                   {inv.status === 'draft' && (
                     <button
-                      onClick={() => startTransition(() => { sendInvoiceAction(inv.id) })}
-                      className="text-[#555050] hover:text-[#C9963A] font-mono text-[10px] cursor-pointer transition-colors"
+                      onClick={() => handleSend(inv.id)}
+                      disabled={sendingId !== null}
+                      className="text-[#555050] hover:text-[#C9963A] disabled:opacity-40 font-mono text-[10px] cursor-pointer transition-colors"
                     >
-                      ✉ Send
+                      {sendingId === inv.id ? 'Sending…' : '✉ Send'}
                     </button>
                   )}
                   {inv.status !== 'paid' && (
@@ -276,9 +296,12 @@ export function FinancesClient({ data }: { data: FinancesData }) {
                       ✓ Paid
                     </button>
                   )}
-                  {client && (
-                    <PDFButton invoice={inv} client={client} />
-                  )}
+                  <a
+                    href={`/finances/invoices/${inv.id}/pdf`}
+                    className="text-[#555050] hover:text-[#F5F0E8] font-mono text-[10px] cursor-pointer transition-colors"
+                  >
+                    PDF
+                  </a>
                 </div>
               </div>
             )
