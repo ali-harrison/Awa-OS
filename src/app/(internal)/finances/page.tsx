@@ -1,6 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { Header } from '@/components/layout/Header'
-import { PageWrapper } from '@/components/layout/PageWrapper'
 import { FinancesClient } from './FinancesClient'
 import { displayStatus } from '@/lib/invoices'
 import { nzDate } from '@/lib/format'
@@ -27,20 +25,15 @@ export default async function FinancesPage() {
   const overdue = total(inv.filter((i) => displayStatus(i) === 'overdue'))
 
   return (
-    <>
-      <Header title="Finances" subtitle="Invoices & revenue" />
-      <PageWrapper>
-        <FinancesClient
-          data={{
-            revenueMTD,
-            outstanding,
-            overdue,
-            invoices: inv,
-            clients: (clients ?? []) as Client[],
-            projects: (projects ?? []) as Project[],
-          }}
-        />
-      </PageWrapper>
-    </>
+    <FinancesClient
+      data={{
+        revenueMTD,
+        outstanding,
+        overdue,
+        invoices: inv,
+        clients: (clients ?? []) as Client[],
+        projects: (projects ?? []) as Project[],
+      }}
+    />
   )
 }

@@ -1,25 +1,15 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
+import { River } from '@/components/river/River'
+import { pointOnRiver } from '@/components/river/geometry'
 import { daysSince, formatDollars } from '@/lib/format'
-import { NEXT_ACTIONS, type ProjectStatus } from '@/types'
+import { NEXT_ACTIONS, PROJECT_STAGES, STAGE_LABELS } from '@/types'
 import type { Client, Project } from '@/types'
 
-const PIPELINE_COLUMNS: { status: ProjectStatus; label: string }[] = [
-  { status: 'onboarding', label: 'Onboarding' },
-  { status: 'questionnaire_sent', label: 'Questionnaire' },
-  { status: 'questionnaire_received', label: 'Q. Received' },
-  { status: 'proposal_sent', label: 'Proposal' },
-  { status: 'contract_sent', label: 'Contract' },
-  { status: 'deposit_pending', label: 'Deposit' },
-  { status: 'deposit_paid', label: 'Dep. Paid' },
-  { status: 'in_progress', label: 'In Progress' },
-  { status: 'review', label: 'Review' },
-  { status: 'complete', label: 'Complete' },
-]
-
-type ProjectWithClient = Project & { client: Pick<Client, 'id' | 'name' | 'company'> }
+type ProjectRow = Project & { client: Pick<Client, 'id' | 'name' | 'company'> }
 
 export default async function PipelinePage() {
   const supabase = await createClient()
@@ -29,101 +19,93 @@ export default async function PipelinePage() {
     .select('*, client:clients(id, name, company)')
     .order('stage_updated_at', { ascending: true })
 
-  const all = (projects ?? []) as ProjectWithClient[]
-
-  const byStatus = Object.fromEntries(
-    PIPELINE_COLUMNS.map(({ status }) => [
-      status,
-      all.filter((p) => p.status === status),
-    ])
-  )
-
+  const all = (projects ?? []) as ProjectRow[]
   const activeCount = all.filter((p) => p.status !== 'complete').length
+  const activeValue = all.filter((p) => p.status !== 'complete').reduce((s, p) => s + (p.value ?? 0), 0)
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       <Header
         title="Pipeline"
-        subtitle={`${activeCount} active project${activeCount !== 1 ? 's' : ''}`}
+        subtitle={`${activeCount} active project${activeCount !== 1 ? 's' : ''} · ${formatDollars(activeValue)} on the river`}
       />
 
-      {/* Full-width scrollable board — no PageWrapper so it fills the screen */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden px-6 py-5">
-        <div className="flex gap-3 h-full min-w-max">
-          {PIPELINE_COLUMNS.map(({ status, label }) => {
-            const cards = byStatus[status] ?? []
-            const colValue = cards.reduce((s, p) => s + (p.value ?? 0), 0)
+      <div className="flex-1 overflow-auto px-5 pb-6 md:px-8">
+        <div className="relative min-w-max">
+          {/* The river runs along the top of the board, and each stage hangs off it */}
+          <div className="absolute inset-x-0 top-0 h-[84px]">
+            <River />
+          </div>
 
-            return (
-              <div key={status} className="flex flex-col w-56 flex-shrink-0">
-                {/* Column header */}
-                <div className="flex items-center justify-between mb-2 px-0.5">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={status}>{label}</Badge>
+          <div className="flex gap-3">
+            {PROJECT_STAGES.map((status, i) => {
+              const cards = all.filter((p) => p.status === status)
+              const columnValue = cards.reduce((s, p) => s + (p.value ?? 0), 0)
+              const { top } = pointOnRiver((i + 0.5) / PROJECT_STAGES.length)
+
+              return (
+                <div key={status} className="flex w-60 shrink-0 flex-col">
+                  <div className="relative h-[100px]">
+                    <span
+                      aria-hidden
+                      className="absolute left-1/2 w-px bg-line-strong"
+                      style={{ top: `${top * 0.84}%`, bottom: 0 }}
+                    />
+                    <span
+                      aria-hidden
+                      className="absolute left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-bone"
+                      style={{ top: `${top * 0.84}%` }}
+                    />
                   </div>
-                  <div className="flex items-center gap-2">
-                    {colValue > 0 && (
-                      <span className="text-[#555050] font-mono text-[9px]">
-                        {formatDollars(colValue)}
-                      </span>
-                    )}
-                    <span className="text-[#2A2A2A] font-mono text-[9px] border border-[#2A2A2A] px-1">
-                      {cards.length}
+
+                  <div className="mb-2.5 flex items-center justify-between gap-2 rounded-xl bg-bone/[0.04] px-3 py-2">
+                    <Badge variant={status} dot className="!bg-transparent !px-0">{STAGE_LABELS[status]}</Badge>
+                    <span className="flex items-baseline gap-2 font-mono text-xs">
+                      {columnValue > 0 && <span className="text-dim">{formatDollars(columnValue)}</span>}
+                      <span className="text-bone">{cards.length}</span>
                     </span>
                   </div>
-                </div>
 
-                {/* Cards */}
-                <div className="flex flex-col gap-2 overflow-y-auto flex-1 pb-2">
-                  {cards.map((p) => {
-                    const days = daysSince(p.stage_updated_at)
-                    const isStale =
-                      (p.status === 'questionnaire_sent' && days > 5) ||
-                      (p.status === 'proposal_sent' && days > 3)
+                  <div className="flex flex-col gap-2">
+                    {cards.map((p) => {
+                      const days = daysSince(p.stage_updated_at)
+                      const isStale =
+                        (p.status === 'questionnaire_sent' && days > 5) ||
+                        (p.status === 'proposal_sent' && days > 3)
+                      const clientName = p.client?.company ?? p.client?.name ?? '—'
 
-                    return (
-                      <Link
-                        key={p.id}
-                        href={`/projects/${p.id}`}
-                        className="block border border-[#1A1A1A] hover:border-[#2A2A2A] bg-[#111111] hover:bg-[#1A1A1A] px-3 py-3 transition-colors duration-100 group"
-                      >
-                        <p className="text-[#F5F0E8] font-mono text-xs font-medium truncate mb-0.5">
-                          {p.name}
-                        </p>
-                        <p className="text-[#555050] font-mono text-[10px] truncate mb-2">
-                          {p.client?.company ?? p.client?.name ?? '—'}
-                        </p>
-
-                        {/* Next action */}
-                        <p className="text-[#555050] font-mono text-[9px] leading-relaxed mb-2 line-clamp-2">
-                          → {NEXT_ACTIONS[p.status]}
-                        </p>
-
-                        <div className="flex items-center justify-between">
-                          {p.value != null ? (
-                            <span className="text-[#8A8580] font-mono text-[10px]">
-                              {formatDollars(p.value)}
+                      return (
+                        <Link
+                          key={p.id}
+                          href={`/projects/${p.id}`}
+                          className="block rounded-xl border border-line bg-surface p-3.5 transition-all duration-150 hover:-translate-y-0.5 hover:border-line-strong"
+                        >
+                          <div className="mb-2 flex items-center gap-2.5">
+                            <Avatar name={clientName} size="sm" />
+                            <p className="truncate text-[13px] text-dim">{clientName}</p>
+                          </div>
+                          <p className="text-sm leading-snug font-medium text-bone">{p.name}</p>
+                          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-dim">{NEXT_ACTIONS[p.status]}</p>
+                          <div className="mt-2.5 flex items-center justify-between">
+                            <span className="font-mono text-[13px] text-muted">
+                              {p.value != null ? formatDollars(p.value) : ''}
                             </span>
-                          ) : (
-                            <span />
-                          )}
-                          {isStale && (
-                            <Badge variant="amber">{days}d</Badge>
-                          )}
-                        </div>
-                      </Link>
-                    )
-                  })}
+                            {isStale && <Badge variant="red" className="normal-case">{days}d quiet</Badge>}
+                          </div>
+                        </Link>
+                      )
+                    })}
 
-                  {cards.length === 0 && (
-                    <div className="border border-dashed border-[#1A1A1A] px-3 py-6 text-center">
-                      <p className="text-[#2A2A2A] font-mono text-[10px]">—</p>
-                    </div>
-                  )}
+                    {cards.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-line px-3 py-6 text-center text-xs text-dim/60">
+                        Nothing here
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       </div>
     </div>

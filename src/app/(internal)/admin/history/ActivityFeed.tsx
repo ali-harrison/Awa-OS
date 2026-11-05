@@ -1,6 +1,8 @@
 'use client'
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { ArrowLeftRight, Mail, ShieldCheck } from 'lucide-react'
+import { Card, EmptyState } from '@/components/ui/Card'
 import { formatDateTime } from '@/lib/format'
 
 type LogEntry = {
@@ -14,16 +16,10 @@ type LogEntry = {
   performed_by: string | null
 }
 
-const TYPE_ICON: Record<string, string> = {
-  email: '◇',
-  audit: '◈',
-  change: '◧',
-}
-
-const TYPE_COLOUR: Record<string, string> = {
-  email: 'text-[#C9963A]',
-  audit: 'text-[#4CAF7D]',
-  change: 'text-[#8A8580]',
+const TYPE_STYLE = {
+  email: { icon: Mail, tint: 'bg-amber/12 text-amber' },
+  audit: { icon: ShieldCheck, tint: 'bg-pounamu/12 text-pounamu' },
+  change: { icon: ArrowLeftRight, tint: 'bg-water/12 text-water' },
 }
 
 const TABS = [
@@ -48,10 +44,10 @@ function CopyButton({ value }: { value: string }) {
   return (
     <button
       onClick={() => navigator.clipboard.writeText(value)}
-      className="text-[#2A2A2A] hover:text-[#C9963A] font-mono text-[10px] ml-2 transition-colors duration-150 cursor-pointer"
+      className="ml-2 cursor-pointer text-[11px] text-dim transition-colors duration-150 hover:text-amber"
       title="Copy to clipboard"
     >
-      [copy]
+      Copy
     </button>
   )
 }
@@ -67,79 +63,47 @@ function LogRow({ log }: { log: LogEntry }) {
   const changeNew = meta.new_value != null ? String(meta.new_value) : '—'
   const absoluteTime = formatDateTime(log.created_at)
 
+  const { icon: Icon, tint } = TYPE_STYLE[log.type]
+
   return (
-    <div className="flex gap-4 px-4 py-3 border-b border-[#1A1A1A] hover:bg-[#0D0D0D] transition-colors duration-100">
-      {/* Icon */}
-      <span className={`font-mono text-base w-4 flex-shrink-0 mt-0.5 ${TYPE_COLOUR[log.type]}`}>
-        {TYPE_ICON[log.type]}
+    <div className="flex gap-3.5 px-5 py-3.5">
+      <span className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full ${tint}`}>
+        <Icon size={15} strokeWidth={1.75} />
       </span>
 
-      {/* Body */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-[#F5F0E8] font-mono text-sm">
-            {log.action ?? '—'}
-          </span>
-          {log.entity && (
-            <span className="text-[#555050] font-mono text-xs">
-              {log.entity}
-              {log.entity_id && (
-                <span className="text-[#2A2A2A] ml-1">
-                  {log.entity_id.slice(0, 8)}…
-                </span>
-              )}
-            </span>
-          )}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-sm font-medium text-bone">{log.action?.replace(/_/g, ' ') ?? '—'}</span>
+          {log.entity && <span className="text-[13px] text-dim">{log.entity}</span>}
         </div>
 
-        {/* Email meta */}
         {isEmail ? (
-          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
-            {emailTo ? (
-              <span className="text-[#8A8580] font-mono text-xs">
-                to: <span className="text-[#F5F0E8]">{emailTo}</span>
-              </span>
-            ) : null}
-            {emailSubject ? (
-              <span className="text-[#8A8580] font-mono text-xs truncate max-w-xs">
-                {emailSubject}
-              </span>
-            ) : null}
+          <div className="mt-0.5 flex flex-wrap gap-x-3 text-[13px] text-dim">
+            {emailTo ? <span>to {emailTo}</span> : null}
+            {emailSubject ? <span className="max-w-sm truncate">{emailSubject}</span> : null}
             {resendId ? (
-              <span className="text-[#555050] font-mono text-xs">
-                id: {resendId}
+              <span className="font-mono text-xs">
+                {resendId}
                 <CopyButton value={resendId} />
               </span>
             ) : null}
           </div>
         ) : null}
 
-        {/* Change meta */}
         {log.type === 'change' && changeField ? (
-          <div className="mt-1">
-            <span className="text-[#555050] font-mono text-xs">
-              {changeField}:{' '}
-              <span className="text-[#E05252]">{changeOld}</span>
-              {' → '}
-              <span className="text-[#4CAF7D]">{changeNew}</span>
-            </span>
-          </div>
+          <p className="mt-0.5 text-[13px] text-dim">
+            {changeField}: <span className="text-muted">{changeOld}</span> → <span className="text-bone">{changeNew}</span>
+          </p>
         ) : null}
-
-        {/* Performer */}
-        {log.performed_by && (
-          <span className="text-[#2A2A2A] font-mono text-[10px] mt-0.5 block">
-            {log.performed_by.slice(0, 8)}…
-          </span>
-        )}
       </div>
 
-      {/* Timestamp */}
-      <div className="flex-shrink-0 text-right" title={absoluteTime}>
-        <span className="text-[#555050] font-mono text-xs cursor-default" suppressHydrationWarning>
-          {relativeTime(log.created_at)}
-        </span>
-      </div>
+      <span
+        className="shrink-0 cursor-default font-mono text-xs text-dim"
+        title={absoluteTime}
+        suppressHydrationWarning
+      >
+        {relativeTime(log.created_at)}
+      </span>
     </div>
   )
 }
@@ -171,7 +135,7 @@ export function ActivityFeed({
   return (
     <div className="flex flex-col gap-4">
       {/* Filter tabs */}
-      <div className="flex gap-0 border-b border-[#1A1A1A]">
+      <div className="flex gap-1 border-b border-line">
         {TABS.map(({ label, value }) => {
           const isActive = activeType === value
           return (
@@ -179,10 +143,8 @@ export function ActivityFeed({
               key={label}
               onClick={() => navigate(value, 1)}
               className={[
-                'px-4 py-2.5 font-mono text-xs uppercase tracking-widest transition-colors duration-150 border-b-2 -mb-px cursor-pointer',
-                isActive
-                  ? 'text-[#F5F0E8] border-[#C9963A]'
-                  : 'text-[#555050] border-transparent hover:text-[#8A8580]',
+                '-mb-px cursor-pointer border-b-2 px-3 py-2.5 text-sm transition-colors duration-150',
+                isActive ? 'border-amber font-medium text-bone' : 'border-transparent text-dim hover:text-muted',
               ].join(' ')}
             >
               {label}
@@ -192,35 +154,31 @@ export function ActivityFeed({
       </div>
 
       {/* Feed */}
-      <div className="border border-[#1A1A1A]">
-        {logs.length === 0 ? (
-          <div className="px-6 py-10 text-center">
-            <p className="text-[#555050] font-mono text-sm">No activity yet.</p>
-          </div>
-        ) : (
-          logs.map((log) => <LogRow key={log.id} log={log} />)
-        )}
-      </div>
+      {logs.length === 0 ? (
+        <EmptyState title="No activity yet" />
+      ) : (
+        <Card padding="none" className="divide-y divide-line overflow-hidden">
+          {logs.map((log) => <LogRow key={log.id} log={log} />)}
+        </Card>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between text-sm">
           <button
             onClick={() => navigate(activeType, currentPage - 1)}
             disabled={currentPage <= 1}
-            className="text-[#555050] hover:text-[#F5F0E8] disabled:opacity-20 font-mono text-xs uppercase tracking-widest transition-colors duration-150 cursor-pointer disabled:cursor-default"
+            className="cursor-pointer text-dim transition-colors duration-150 hover:text-bone disabled:cursor-default disabled:opacity-30"
           >
-            ← Prev
+            ← Newer
           </button>
-          <span className="text-[#555050] font-mono text-xs">
-            {currentPage} / {totalPages}
-          </span>
+          <span className="font-mono text-xs text-dim">{currentPage} / {totalPages}</span>
           <button
             onClick={() => navigate(activeType, currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className="text-[#555050] hover:text-[#F5F0E8] disabled:opacity-20 font-mono text-xs uppercase tracking-widest transition-colors duration-150 cursor-pointer disabled:cursor-default"
+            className="cursor-pointer text-dim transition-colors duration-150 hover:text-bone disabled:cursor-default disabled:opacity-30"
           >
-            Next →
+            Older →
           </button>
         </div>
       )}

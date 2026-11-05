@@ -15,7 +15,7 @@ export function PortalNav({ base }: { base: string }) {
   const pathname = usePathname()
 
   return (
-    <div className="flex items-center gap-0 order-last w-full overflow-x-auto md:order-none md:w-auto">
+    <div className="order-last -mx-2 flex w-[calc(100%+1rem)] items-center gap-0.5 overflow-x-auto pb-2 md:order-none md:mx-0 md:w-auto md:pb-0">
       {NAV_ITEMS.map(({ href, label }) => {
         const fullHref = `${base}${href}`
         const isActive = href === ''
@@ -26,11 +26,10 @@ export function PortalNav({ base }: { base: string }) {
           <Link
             key={label}
             href={fullHref}
+            aria-current={isActive ? 'page' : undefined}
             className={[
-              'px-4 py-4 font-mono text-xs uppercase tracking-widest whitespace-nowrap transition-colors duration-150 border-b-2',
-              isActive
-                ? 'text-[#f0ece3] border-[#f59e0b]'
-                : 'text-[#555555] hover:text-[#f0ece3] border-transparent',
+              'rounded-full px-3 py-1.5 text-sm whitespace-nowrap transition-colors duration-150',
+              isActive ? 'bg-amber/15 font-medium text-amber' : 'text-dim hover:text-bone',
             ].join(' ')}
           >
             {label}

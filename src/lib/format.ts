@@ -51,6 +51,14 @@ export function nzDate(value: string | Date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: NZ_TIME_ZONE }).format(new Date(value))
 }
 
+/** Te reo greeting for the time of day in NZ. */
+export function nzGreeting(): string {
+  const hour = Number(
+    new Intl.DateTimeFormat('en-NZ', { hour: 'numeric', hourCycle: 'h23', timeZone: NZ_TIME_ZONE }).format(new Date())
+  )
+  return hour >= 4 && hour < 12 ? 'Mōrena' : 'Kia ora'
+}
+
 export function daysSince(value: string): number {
   return Math.floor((Date.now() - new Date(value).getTime()) / 86400000)
 }

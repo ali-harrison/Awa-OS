@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Input, Select } from '@/components/ui/Input'
+import { Card, EmptyState } from '@/components/ui/Card'
+import { FormError, Input, Select } from '@/components/ui/Input'
 import { SlideOver } from '@/components/ui/SlideOver'
 import { sendEmailAction } from './actions'
 import { formatDate, formatNZD } from '@/lib/format'
@@ -27,7 +28,7 @@ const TEMPLATE_META: {
     subject: 'Welcome to your project — [project name]',
     vars: ['clientName', 'projectName'],
     previewVars: { clientName: 'Aroha Ngata', projectName: 'Website Redesign' },
-    autoVars: ['portalUrl — one-time setup link generated on send'],
+    autoVars: ['portalLink — a one-time setup link is generated when you send'],
   },
   {
     key: 'questionnaire_link',
@@ -35,7 +36,7 @@ const TEMPLATE_META: {
     subject: 'Your project questionnaire — [project name]',
     vars: ['clientName', 'projectName'],
     previewVars: { clientName: 'Aroha Ngata', projectName: 'Website Redesign' },
-    autoVars: ['questionnaireUrl — portal link generated on send'],
+    autoVars: ['questionnaireLink — the portal link is generated when you send'],
   },
   {
     key: 'proposal_follow_up',
@@ -59,6 +60,12 @@ const TEMPLATE_META: {
     previewVars: { clientName: 'Aroha Ngata', projectName: 'Website Redesign' },
   },
 ]
+
+/** clientName → Client name */
+function fieldLabel(key: string): string {
+  const words = key.replace(/([A-Z])/g, ' $1').toLowerCase()
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
 
 // ─── Send slide-over ──────────────────────────────────────────────────────────
 
@@ -123,7 +130,7 @@ function SendSlideOver({
     // paymentLink can be blank: not every invoice has one
     const missing = template.vars.filter((v) => v !== 'paymentLink' && !vars[v]?.trim())
     if (missing.length > 0) {
-      setError(`Please fill in: ${missing.join(', ')}`)
+      setError(`Please fill in: ${missing.map(fieldLabel).join(', ')}`)
       return
     }
     setSending(true)
@@ -141,9 +148,9 @@ function SendSlideOver({
 
   if (sent) {
     return (
-      <div className="text-center py-8">
-        <p className="text-[#4CAF7D] font-mono text-sm mb-2">Email sent</p>
-        <p className="text-[#555050] font-mono text-xs mb-6">
+      <div className="py-8 text-center">
+        <p className="mb-1 font-display text-2xl text-pounamu">Email sent</p>
+        <p className="mb-6 text-sm text-dim">
           Sent to {selectedClient?.email}
         </p>
         <Button size="sm" variant="secondary" onClick={onClose}>Close</Button>
@@ -174,21 +181,21 @@ function SendSlideOver({
 
       {/* Variable overrides */}
       <div>
-        <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-3">Variables</p>
+        <p className="eyebrow mb-3">Variables</p>
         <div className="flex flex-col gap-2">
           {template.vars.map((v) => (
             <Input
               key={v}
-              label={v}
+              label={fieldLabel(v)}
               value={vars[v] ?? ''}
               placeholder={template.previewVars[v]}
               onChange={(e) => setVars((prev) => ({ ...prev, [v]: e.target.value }))}
             />
           ))}
           {template.autoVars && template.autoVars.length > 0 && (
-            <div className="border border-[#1A1A1A] px-3 py-2 mt-1">
+            <div className="mt-1 rounded-[10px] bg-pounamu/8 px-3 py-2">
               {template.autoVars.map((v) => (
-                <p key={v} className="text-[#4CAF7D] font-mono text-[10px]">⚡ {v}</p>
+                <p key={v} className="text-xs text-pounamu">{v}</p>
               ))}
             </div>
           )}
@@ -197,8 +204,8 @@ function SendSlideOver({
 
       {/* Subject preview */}
       <div>
-        <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-2">Subject preview</p>
-        <p className="text-[#8A8580] font-mono text-xs border border-[#1A1A1A] px-3 py-2">
+        <p className="eyebrow mb-2">Subject preview</p>
+        <p className="rounded-[10px] bg-bone/[0.04] px-3 py-2.5 text-sm text-muted">
           {template.subject
             .replace('[project name]', vars.projectName ?? '…')
             .replace('[number]', vars.invoiceNumber ?? '…')
@@ -208,14 +215,12 @@ function SendSlideOver({
       </div>
 
       {selectedClient && (
-        <p className="text-[#555050] font-mono text-xs">
-          Sending to: <span className="text-[#F5F0E8]">{selectedClient.email}</span>
+        <p className="text-sm text-dim">
+          Sending to <span className="text-bone">{selectedClient.email}</span>
         </p>
       )}
 
-      {error && (
-        <p className="text-[#E05252] font-mono text-xs border border-[#E0525233] bg-[#E0525211] px-3 py-2">{error}</p>
-      )}
+      {error && <FormError>{error}</FormError>}
 
       <Button onClick={handleSend} loading={sending} disabled={!selectedClientId}>
         Send email →
@@ -245,14 +250,14 @@ export function EmailsClient({
   return (
     <>
       {/* Tabs */}
-      <div className="flex border-b border-[#1A1A1A] mb-5">
+      <div className="mb-4 flex gap-1 border-b border-line">
         {(['templates', 'log'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={[
-              'px-4 py-2.5 font-mono text-xs uppercase tracking-wide border-b-2 transition-colors duration-100 cursor-pointer',
-              tab === t ? 'border-[#F5F0E8] text-[#F5F0E8]' : 'border-transparent text-[#555050] hover:text-[#8A8580]',
+              '-mb-px cursor-pointer border-b-2 px-3 py-2.5 text-sm transition-colors duration-150',
+              tab === t ? 'border-amber font-medium text-bone' : 'border-transparent text-dim hover:text-muted',
             ].join(' ')}
           >
             {t === 'templates' ? 'Templates' : 'Sent log'}
@@ -261,69 +266,57 @@ export function EmailsClient({
       </div>
 
       {tab === 'templates' && (
-        <div className="flex flex-col gap-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {TEMPLATE_META.map((tpl) => (
-            <div key={tpl.key} className="border border-[#1A1A1A] hover:border-[#2A2A2A] transition-colors duration-100">
-              <div className="px-4 py-3 flex items-start gap-4">
-                <div className="flex-1">
-                  <p className="text-[#F5F0E8] font-mono text-sm font-medium mb-0.5">{tpl.name}</p>
-                  <p className="text-[#555050] font-mono text-xs mb-2">{tpl.subject}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {tpl.vars.map((v) => (
-                      <Badge key={v} variant="muted">{v}</Badge>
-                    ))}
-                    {tpl.autoVars?.map((v) => (
-                      <Badge key={v} variant="green">⚡ {v}</Badge>
-                    ))}
-                  </div>
+            <Card key={tpl.key} className="flex items-start gap-4 transition-colors duration-150 hover:border-line-strong">
+              <div className="min-w-0 flex-1">
+                <p className="font-display text-lg text-bone">{tpl.name}</p>
+                <p className="mt-0.5 mb-3 text-[13px] text-dim">{tpl.subject}</p>
+                <div className="flex flex-wrap gap-1">
+                  {tpl.vars.map((v) => (
+                    <Badge key={v} variant="muted" className="normal-case">{fieldLabel(v)}</Badge>
+                  ))}
+                  {tpl.autoVars?.map((v) => (
+                    <Badge key={v} variant="green" className="normal-case">{fieldLabel(v.split(' — ')[0])} added for you</Badge>
+                  ))}
                 </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => setSelectedTemplate(tpl)}
-                >
-                  Send
-                </Button>
               </div>
-            </div>
+              <Button size="sm" variant="secondary" onClick={() => setSelectedTemplate(tpl)}>
+                Send
+              </Button>
+            </Card>
           ))}
         </div>
       )}
 
       {tab === 'log' && (
-        <div className="border border-[#1A1A1A]">
-          {emailLog.length === 0 ? (
-            <div className="px-6 py-10 text-center">
-              <p className="text-[#555050] font-mono text-sm">No emails sent yet.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-[#1A1A1A]">
-              {emailLog.map((log) => (
-                <div key={log.id} className="px-4 py-3 flex items-center gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[#F5F0E8] font-mono text-sm truncate">{log.subject}</p>
-                    <p className="text-[#555050] font-mono text-xs mt-0.5">
-                      {log.client?.name ?? '—'} · {log.template_key}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <Badge variant={log.status === 'sent' ? 'green' : 'red'}>{log.status}</Badge>
-                    <span className="text-[#555050] font-mono text-xs">
-                      {formatDate(log.sent_at)}
-                    </span>
-                  </div>
+        emailLog.length === 0 ? (
+          <EmptyState title="No emails sent yet" />
+        ) : (
+          <Card padding="none" className="divide-y divide-line overflow-hidden">
+            {emailLog.map((log) => (
+              <div key={log.id} className="flex items-center gap-4 px-5 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-bone">{log.subject}</p>
+                  <p className="mt-0.5 text-[13px] text-dim">
+                    {log.client?.name ?? '—'} · {log.template_key.replace(/_/g, ' ')}
+                  </p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <Badge variant={log.status === 'sent' ? 'green' : 'red'} dot>{log.status}</Badge>
+                  <span className="font-mono text-xs text-dim">{formatDate(log.sent_at)}</span>
+                </div>
+              </div>
+            ))}
+          </Card>
+        )
       )}
 
       {selectedTemplate && (
         <SlideOver
           open={!!selectedTemplate}
           onClose={() => setSelectedTemplate(null)}
-          title={`Send — ${selectedTemplate.name}`}
+          title={`Send: ${selectedTemplate.name}`}
         >
           <SendSlideOver
             template={selectedTemplate}

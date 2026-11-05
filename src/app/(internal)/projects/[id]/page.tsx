@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { PageWrapper } from '@/components/layout/PageWrapper'
-import { Badge } from '@/components/ui/Badge'
 import { ProjectDetailClient } from './ProjectDetailClient'
 import { CLIENT_COLUMNS, type Client, type Project, type Task, type ProjectFile, type CalendarEvent, type QuestionnaireResponse } from '@/types'
 
@@ -38,13 +37,12 @@ export default async function ProjectDetailPage({
       <Header
         title={project.name}
         subtitle={
-          <Link href={`/clients/${client.id}`} className="hover:text-[#F5F0E8] transition-colors duration-150">
+          <Link href={`/clients/${client.id}`} className="transition-colors duration-150 hover:text-bone">
             {client.name}{client.company ? ` — ${client.company}` : ''}
           </Link>
         }
         backHref="/projects"
         backLabel="Projects"
-        actions={<Badge variant={project.status}>{project.status.replace(/_/g, ' ')}</Badge>}
       />
       <PageWrapper>
         <ProjectDetailClient
