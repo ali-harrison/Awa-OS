@@ -1,6 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { Header } from '@/components/layout/Header'
-import { PageWrapper } from '@/components/layout/PageWrapper'
 import { ProjectsClient } from './ProjectsClient'
 import { CLIENT_COLUMNS, type Client, type Project } from '@/types'
 
@@ -21,15 +19,10 @@ export default async function ProjectsPage({
   ])
 
   return (
-    <>
-      <Header title="Projects" subtitle={`${projects?.length ?? 0} total`} />
-      <PageWrapper>
-        <ProjectsClient
-          projects={(projects ?? []) as (Project & { client: Pick<Client, 'id' | 'name' | 'company'> })[]}
-          clients={(clients ?? []) as Client[]}
-          defaultClientId={defaultClientId}
-        />
-      </PageWrapper>
-    </>
+    <ProjectsClient
+      projects={(projects ?? []) as (Project & { client: Pick<Client, 'id' | 'name' | 'company'> })[]}
+      clients={(clients ?? []) as Client[]}
+      defaultClientId={defaultClientId}
+    />
   )
 }

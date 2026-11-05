@@ -2,14 +2,21 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { Header } from '@/components/layout/Header'
+import { PageWrapper } from '@/components/layout/PageWrapper'
+import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Input, Select } from '@/components/ui/Input'
+import { Card, EmptyState } from '@/components/ui/Card'
+import { FormError, Input, Select } from '@/components/ui/Input'
 import { SlideOver } from '@/components/ui/SlideOver'
 import { createClientAction } from './actions'
 import { useFormSubmit } from '@/lib/use-form-submit'
 import { formatDate } from '@/lib/format'
 import { CLIENT_STATUS_OPTIONS, CLIENT_TYPE_OPTIONS, type Client, type ClientType } from '@/types'
+
+const COLUMNS =
+  'grid grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_120px_120px_70px_80px] items-center gap-4 px-5'
 
 function NewClientForm({ onSuccess }: { onSuccess: () => void }) {
   const { onSubmit, error, pending } = useFormSubmit(createClientAction, onSuccess)
@@ -19,19 +26,13 @@ function NewClientForm({ onSuccess }: { onSuccess: () => void }) {
       <Input label="Name" name="name" required placeholder="Aroha Ngata" />
       <Input label="Email" name="email" type="email" required placeholder="aroha@example.co.nz" />
       <Input label="Phone" name="phone" type="tel" placeholder="+64 21 000 0000" />
-      <Input label="Company" name="company" placeholder="KIHI Charitable Trust" />
+      <Input label="Company" name="company" placeholder="Kōwhai Community Trust" />
       <Select label="Type" name="type" defaultValue="other" options={CLIENT_TYPE_OPTIONS} />
       <Select label="Status" name="status" defaultValue="lead" options={CLIENT_STATUS_OPTIONS} />
-      {error && (
-        <p className="text-[#E05252] font-mono text-xs border border-[#E0525233] bg-[#E0525211] px-3 py-2">
-          {error}
-        </p>
-      )}
-      <div className="pt-2 flex gap-2">
-        <Button type="submit" loading={pending} className="flex-1">
-          Create client
-        </Button>
-      </div>
+      {error && <FormError>{error}</FormError>}
+      <Button type="submit" loading={pending} className="mt-2">
+        Create client
+      </Button>
     </form>
   )
 }
@@ -41,59 +42,62 @@ export function ClientsClient({ clients }: { clients: Client[] }) {
 
   return (
     <>
-      {/* Header actions */}
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-[#555050] font-mono text-xs">{clients.length} client{clients.length !== 1 ? 's' : ''}</p>
-        <Button size="sm" onClick={() => setOpen(true)}>+ New Client</Button>
-      </div>
+      <Header
+        title="Clients"
+        subtitle={`${clients.length} client${clients.length !== 1 ? 's' : ''}`}
+        actions={<Button size="sm" onClick={() => setOpen(true)}>+ New Client</Button>}
+      />
+      <PageWrapper>
+        {clients.length === 0 ? (
+          <EmptyState title="No clients yet">
+            <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
+              Add your first client
+            </Button>
+          </EmptyState>
+        ) : (
+          <Card padding="none" className="overflow-hidden">
+            <div className={`${COLUMNS} border-b border-line py-2.5`}>
+              <span className="eyebrow">Name</span>
+              <span className="eyebrow hidden lg:block">Company</span>
+              <span className="eyebrow hidden lg:block">Type</span>
+              <span className="eyebrow">Status</span>
+              <span className="eyebrow hidden lg:block">Portal</span>
+              <span className="eyebrow hidden lg:block">Added</span>
+            </div>
+            <div className="divide-y divide-line">
+              {clients.map((client) => (
+                <Link
+                  key={client.id}
+                  href={`/clients/${client.id}`}
+                  className={`${COLUMNS} py-3 transition-colors duration-150 hover:bg-bone/[0.03]`}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar name={client.name} />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-bone">{client.name}</p>
+                      <p className="truncate text-[13px] text-dim">{client.email}</p>
+                    </div>
+                  </div>
+                  <p className="hidden truncate text-sm text-muted lg:block">{client.company ?? '—'}</p>
+                  <span className="hidden lg:block">
+                    <Badge variant={client.type as ClientType}>{client.type}</Badge>
+                  </span>
+                  <Badge variant={client.status} dot>{client.status}</Badge>
+                  <span className="hidden items-center gap-1.5 text-[13px] lg:flex">
+                    <span className={`size-1.5 rounded-full ${client.portal_access ? 'bg-pounamu' : 'bg-dim/50'}`} />
+                    <span className={client.portal_access ? 'text-muted' : 'text-dim'}>
+                      {client.portal_access ? 'On' : 'Off'}
+                    </span>
+                  </span>
+                  <p className="hidden font-mono text-xs text-dim lg:block">{formatDate(client.created_at)}</p>
+                </Link>
+              ))}
+            </div>
+          </Card>
+        )}
+      </PageWrapper>
 
-      {/* Table */}
-      {clients.length === 0 ? (
-        <div className="border border-[#1A1A1A] px-6 py-12 text-center">
-          <p className="text-[#555050] font-mono text-sm">No clients yet.</p>
-          <Button size="sm" variant="secondary" className="mt-4" onClick={() => setOpen(true)}>
-            Add your first client
-          </Button>
-        </div>
-      ) : (
-        <div className="border border-[#1A1A1A]">
-          {/* Table header */}
-          <div className="grid grid-cols-[1fr_1fr_120px_120px_80px_100px] gap-4 px-4 py-2 border-b border-[#1A1A1A] bg-[#0A0A0A]">
-            {['Name', 'Company', 'Type', 'Status', 'Portal', 'Added'].map((h) => (
-              <span key={h} className="text-[#555050] font-mono text-[10px] uppercase tracking-widest">
-                {h}
-              </span>
-            ))}
-          </div>
-          {/* Rows */}
-          {clients.map((client) => (
-            <Link
-              key={client.id}
-              href={`/clients/${client.id}`}
-              className="grid grid-cols-[1fr_1fr_120px_120px_80px_100px] gap-4 px-4 py-3 border-b border-[#1A1A1A] last:border-b-0 hover:bg-[#111111] transition-colors duration-100 items-center"
-            >
-              <div>
-                <p className="text-[#F5F0E8] font-mono text-sm truncate">{client.name}</p>
-                <p className="text-[#555050] font-mono text-xs truncate">{client.email}</p>
-              </div>
-              <p className="text-[#8A8580] font-mono text-sm truncate">{client.company ?? '—'}</p>
-              <Badge variant={client.type as ClientType}>{client.type}</Badge>
-              <Badge variant={client.status}>{client.status}</Badge>
-              <span className="font-mono text-xs">
-                {client.portal_access
-                  ? <span className="text-[#4CAF7D]">on</span>
-                  : <span className="text-[#555050]">off</span>}
-              </span>
-              <p className="text-[#555050] font-mono text-xs">
-                {formatDate(client.created_at)}
-              </p>
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {/* Slide-over */}
-      <SlideOver open={open} onClose={() => setOpen(false)} title="New Client">
+      <SlideOver open={open} onClose={() => setOpen(false)} title="New client">
         <NewClientForm onSuccess={() => setOpen(false)} />
       </SlideOver>
     </>

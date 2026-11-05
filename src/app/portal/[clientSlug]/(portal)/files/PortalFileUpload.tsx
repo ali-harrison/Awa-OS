@@ -50,7 +50,8 @@ export function PortalFileUpload({ clientSlug }: { clientSlug: string }) {
 
   return (
     <div>
-      <div
+      <button
+        type="button"
         onClick={() => fileRef.current?.click()}
         onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
@@ -60,25 +61,17 @@ export function PortalFileUpload({ clientSlug }: { clientSlug: string }) {
           const file = e.dataTransfer.files?.[0]
           if (file) handleUpload(file)
         }}
-        style={{
-          border: `2px dashed ${dragging ? '#f59e0b' : '#2a2a2a'}`,
-          borderRadius: 6,
-          padding: '40px 24px',
-          textAlign: 'center',
-          cursor: uploading ? 'default' : 'pointer',
-          transition: 'border-color 0.15s',
-          background: dragging ? 'rgba(245,158,11,0.04)' : 'transparent',
-        }}
-        onMouseEnter={(e) => { if (!dragging) e.currentTarget.style.borderColor = '#f59e0b' }}
-        onMouseLeave={(e) => { if (!dragging) e.currentTarget.style.borderColor = '#2a2a2a' }}
+        disabled={uploading}
+        className={[
+          'flex w-full cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-6 py-10 transition-colors duration-150',
+          dragging ? 'border-amber bg-amber/5' : 'border-line-strong hover:border-amber',
+        ].join(' ')}
       >
-        <Upload size={24} style={{ color: '#2a2a2a', margin: '0 auto 12px' }} />
-        {uploading ? (
-          <p className="font-mono text-sm" style={{ color: '#f59e0b' }}>Uploading…</p>
-        ) : (
-          <p className="font-mono text-sm" style={{ color: '#555555' }}>Drop a file or click to browse</p>
-        )}
-      </div>
+        <Upload size={22} className={uploading ? 'text-amber' : 'text-dim'} />
+        <span className={`text-sm ${uploading ? 'text-amber' : 'text-muted'}`}>
+          {uploading ? 'Uploading…' : 'Drop a file or click to browse'}
+        </span>
+      </button>
       <input
         ref={fileRef}
         type="file"
@@ -86,9 +79,7 @@ export function PortalFileUpload({ clientSlug }: { clientSlug: string }) {
         disabled={uploading}
         className="hidden"
       />
-      {error && (
-        <p className="font-mono text-xs mt-2" style={{ color: '#ef4444' }}>{error}</p>
-      )}
+      {error && <p className="mt-2 text-sm text-coral">{error}</p>}
     </div>
   )
 }

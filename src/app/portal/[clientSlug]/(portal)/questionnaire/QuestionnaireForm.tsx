@@ -2,16 +2,11 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { FormError, Textarea } from '@/components/ui/Input'
 import { saveQuestionnaireDraftAction, submitQuestionnaireAction } from './actions'
 import { formatDate } from '@/lib/format'
 import type { QuestionnaireTemplate, QuestionnaireResponse, QuestionItem } from '@/types'
-
-const card = {
-  background: '#0f0f0f',
-  border: '1px solid #1f1f1f',
-  borderRadius: 6,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
-} as const
 
 export function QuestionnaireForm({
   template,
@@ -35,29 +30,27 @@ export function QuestionnaireForm({
 
   if (submitted) {
     return (
-      <div className="flex flex-col gap-6">
-        {/* Confirmation banner */}
-        <div style={{ ...card, border: '1px solid rgba(245,158,11,0.25)', padding: '24px' }}>
-          <p className="font-mono text-sm font-medium mb-1" style={{ color: '#f59e0b' }}>Questionnaire received</p>
-          <p className="font-mono text-sm leading-relaxed" style={{ color: '#555555' }}>
+      <div className="flex flex-col gap-4">
+        <Card className="border-pounamu/30">
+          <p className="font-display text-2xl text-pounamu">Questionnaire received</p>
+          <p className="mt-1 text-muted">
             Thank you — we&apos;ll review your answers and be in touch shortly.
           </p>
           {existingResponse?.submitted_at && (
-            <p className="font-mono text-xs mt-3" style={{ color: '#555555' }}>
+            <p className="mt-2 font-mono text-xs text-dim">
               Submitted {formatDate(existingResponse.submitted_at, 'long')}
             </p>
           )}
-        </div>
+        </Card>
 
-        {/* Read-only answers */}
-        <div style={{ ...card, padding: '24px' }} className="flex flex-col gap-6">
+        <Card padding="none" className="divide-y divide-line overflow-hidden">
           {questions.map((q) => answers[q.id] && (
-            <div key={q.id} className="flex flex-col gap-1">
-              <p className="font-mono text-xs uppercase tracking-widest" style={{ color: '#555555' }}>{q.question}</p>
-              <p className="font-mono text-sm font-medium" style={{ color: '#f0ece3' }}>{answers[q.id]}</p>
+            <div key={q.id} className="px-6 py-4">
+              <p className="mb-1 text-[13px] text-dim">{q.question}</p>
+              <p className="text-sm leading-relaxed text-bone">{answers[q.id]}</p>
             </div>
           ))}
-        </div>
+        </Card>
       </div>
     )
   }
@@ -91,63 +84,45 @@ export function QuestionnaireForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      {/* Files notice */}
-      <div style={{ background: '#0f0f0f', border: '1px solid #1f1f1f', borderRadius: 6, padding: '12px 16px' }}>
-        <p className="font-mono text-xs font-medium mb-1" style={{ color: '#f59e0b' }}>Files & assets</p>
-        <p className="font-mono text-xs leading-relaxed" style={{ color: '#555555' }}>
-          Files & assets can be uploaded in the Files tab once your project is set up. No need to attach anything here.
-        </p>
-      </div>
-
-      {/* Required notice */}
-      <p className="font-mono text-xs" style={{ color: '#555555' }}>
-        Questions marked <span style={{ color: '#ef4444' }}>*</span> are required. Save a draft to come back and finish later.
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <p className="text-sm text-dim">
+        Questions marked <span className="text-coral">*</span> are required. Save a draft to come back and finish later.
+        Files can go in the Files tab, so there&apos;s no need to attach anything here.
       </p>
 
-      {/* Questions */}
-      {questions.map((q, i) => (
-        <div key={q.id} className="flex flex-col gap-2">
-          <label className="font-mono text-sm font-medium" style={{ color: '#f0ece3' }}>
-            <span className="mr-2" style={{ color: '#555555' }}>{String(i + 1).padStart(2, '0')}.</span>
-            {q.question}
-            {q.required && <span className="ml-1" style={{ color: '#ef4444' }}>*</span>}
-          </label>
-          {q.hint && (
-            <p className="font-mono text-xs" style={{ color: '#555555' }}>{q.hint}</p>
-          )}
-          <textarea
-            value={answers[q.id] ?? ''}
-            onChange={(e) => {
-              setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
-              setDraftSaved(false)
-            }}
-            rows={3}
-            className="w-full font-mono text-sm px-3 py-2 outline-none resize-y transition-colors duration-150"
-            style={{ background: '#111111', color: '#f0ece3', border: '1px solid #2a2a2a', borderRadius: 4 }}
-            placeholder="Your answer…"
-            onFocus={(e) => e.currentTarget.style.borderColor = '#f59e0b'}
-            onBlur={(e) => e.currentTarget.style.borderColor = '#2a2a2a'}
-          />
-        </div>
-      ))}
+      <Card padding="none" className="divide-y divide-line">
+        {questions.map((q, i) => (
+          <div key={q.id} className="flex flex-col gap-2 px-6 py-5">
+            <label htmlFor={q.id} className="text-[15px] font-medium text-bone">
+              <span className="mr-2.5 font-mono text-xs text-amber">{String(i + 1).padStart(2, '0')}</span>
+              {q.question}
+              {q.required && <span className="ml-1 text-coral">*</span>}
+            </label>
+            {q.hint && <p className="text-[13px] text-dim">{q.hint}</p>}
+            <Textarea
+              id={q.id}
+              value={answers[q.id] ?? ''}
+              onChange={(e) => {
+                setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
+                setDraftSaved(false)
+              }}
+              rows={3}
+              placeholder="Your answer…"
+            />
+          </div>
+        ))}
+      </Card>
 
-      {error && (
-        <p className="font-mono text-xs px-3 py-2" style={{ color: '#ef4444', background: '#ef444411', border: '1px solid #ef444433', borderRadius: 4 }}>
-          {error}
-        </p>
-      )}
+      {error && <FormError>{error}</FormError>}
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" loading={submitting} disabled={savingDraft}>
           Submit questionnaire →
         </Button>
         <Button type="button" variant="secondary" loading={savingDraft} disabled={submitting} onClick={handleSaveDraft}>
           Save draft
         </Button>
-        {draftSaved && (
-          <span className="font-mono text-xs" style={{ color: '#10b981' }}>Draft saved</span>
-        )}
+        {draftSaved && <span className="text-sm text-pounamu">Draft saved</span>}
       </div>
     </form>
   )

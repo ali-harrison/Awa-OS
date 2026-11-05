@@ -1,9 +1,13 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { Header } from '@/components/layout/Header'
+import { PageWrapper } from '@/components/layout/PageWrapper'
+import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Input, Select } from '@/components/ui/Input'
+import { Card, EmptyState, Stat } from '@/components/ui/Card'
+import { FormError, Input, Select } from '@/components/ui/Input'
 import { SlideOver } from '@/components/ui/SlideOver'
 import { createInvoiceAction, markInvoicePaidAction, sendInvoiceAction } from './actions'
 import { useFormSubmit } from '@/lib/use-form-submit'
@@ -55,19 +59,19 @@ function LineItemEditor({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-[1fr_50px_90px_90px_24px] gap-2 px-1">
+      <div className="grid grid-cols-[1fr_52px_96px_88px_20px] gap-2 px-1">
         {['Description', 'Qty', 'Unit $', 'Amount', ''].map((h) => (
-          <span key={h} className="text-[#555050] font-mono text-[9px] uppercase tracking-widest">{h}</span>
+          <span key={h} className={`eyebrow ${h === 'Amount' ? 'text-right' : ''}`}>{h}</span>
         ))}
       </div>
       {value.map((row, i) => (
-        <div key={i} className="grid grid-cols-[1fr_50px_90px_90px_24px] gap-2 items-center">
+        <div key={i} className="grid grid-cols-[1fr_52px_96px_88px_20px] items-center gap-2">
           <input
             aria-label="Description"
             value={row.description}
             onChange={(e) => updateRow(i, 'description', e.target.value)}
             placeholder="Service description"
-            className="bg-[#111111] text-[#F5F0E8] border border-[#2A2A2A] font-mono text-xs px-2 py-1.5 outline-none focus:border-[#C9963A] transition-colors"
+            className="h-9 rounded-lg border border-line-strong bg-ink px-2 text-[13px] text-bone outline-none transition-colors focus:border-amber"
           />
           <input
             aria-label="Quantity"
@@ -76,7 +80,7 @@ function LineItemEditor({
             min={0}
             step="any"
             onChange={(e) => updateRow(i, 'quantity', e.target.value)}
-            className="bg-[#111111] text-[#F5F0E8] border border-[#2A2A2A] font-mono text-xs px-2 py-1.5 outline-none focus:border-[#C9963A] transition-colors text-right"
+            className="h-9 rounded-lg border border-line-strong bg-ink px-2 text-[13px] text-bone outline-none transition-colors focus:border-amber text-right font-mono"
           />
           <input
             aria-label="Unit price in dollars"
@@ -86,14 +90,14 @@ function LineItemEditor({
             step="0.01"
             placeholder="0.00"
             onChange={(e) => updateRow(i, 'unitPrice', e.target.value)}
-            className="bg-[#111111] text-[#F5F0E8] border border-[#2A2A2A] font-mono text-xs px-2 py-1.5 outline-none focus:border-[#C9963A] transition-colors text-right"
+            className="h-9 rounded-lg border border-line-strong bg-ink px-2 text-[13px] text-bone outline-none transition-colors focus:border-amber text-right font-mono"
           />
-          <span className="text-[#8A8580] font-mono text-xs text-right">{formatNZD(toLineItem(row).amount)}</span>
+          <span className="text-right font-mono text-xs text-muted">{formatNZD(toLineItem(row).amount)}</span>
           <button
             type="button"
             aria-label="Remove line"
             onClick={() => removeRow(i)}
-            className="text-[#555050] hover:text-[#E05252] font-mono text-xs cursor-pointer"
+            className="cursor-pointer text-xs text-dim transition-colors hover:text-coral"
           >
             ✕
           </button>
@@ -156,10 +160,10 @@ function NewInvoiceForm({
         ]}
       />
       <div>
-        <p className="text-[#8A8580] font-mono text-xs uppercase tracking-wide mb-2">Line items</p>
+        <p className="mb-2 text-[13px] font-medium text-muted">Line items</p>
         <LineItemEditor value={rows} onChange={setRows} />
       </div>
-      <div className="flex items-center justify-between border border-[#1A1A1A] px-3 py-2">
+      <div className="flex items-center justify-between rounded-[10px] bg-bone/[0.04] px-3.5 py-3">
         <div className="flex items-center gap-2">
           <input
             type="checkbox"
@@ -167,27 +171,27 @@ function NewInvoiceForm({
             name="gst_included"
             checked={gst}
             onChange={(e) => setGst(e.target.checked)}
-            className="accent-[#C9963A]"
+            className="accent-amber"
           />
-          <label htmlFor="gst" className="text-[#8A8580] font-mono text-xs cursor-pointer">
+          <label htmlFor="gst" className="cursor-pointer text-[13px] text-muted">
             GST included (15%)
           </label>
         </div>
         <div className="text-right">
-          {gst && <p className="text-[#555050] font-mono text-xs">Includes GST: {formatNZD(gstIncludedIn(total))}</p>}
-          <p className="text-[#F5F0E8] font-mono text-sm font-medium">Total: {formatNZD(total)}</p>
+          {gst && <p className="font-mono text-xs text-dim">Includes GST: {formatNZD(gstIncludedIn(total))}</p>}
+          <p className="font-mono text-[15px] font-medium text-bone">Total: {formatNZD(total)}</p>
         </div>
       </div>
       <Input label="Due date" name="due_date" type="date" />
-      {error && (
-        <p className="text-[#E05252] font-mono text-xs border border-[#E0525233] bg-[#E0525211] px-3 py-2">{error}</p>
-      )}
+      {error && <FormError>{error}</FormError>}
       <Button type="submit" loading={pending} className="mt-2">
         Create invoice
       </Button>
     </form>
   )
 }
+
+const COLUMNS = 'grid grid-cols-[130px_minmax(0,1fr)_110px_70px_100px_170px] items-center gap-4 px-5'
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -218,98 +222,86 @@ export function FinancesClient({ data }: { data: FinancesData }) {
 
   return (
     <>
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        {[
-          { label: 'Revenue MTD', value: formatNZD(data.revenueMTD), color: 'text-[#4CAF7D]' },
-          { label: 'Outstanding', value: formatNZD(data.outstanding), color: 'text-[#C9963A]' },
-          { label: 'Overdue', value: formatNZD(data.overdue), color: 'text-[#E05252]' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="border border-[#1A1A1A] px-4 py-4">
-            <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-2">{label}</p>
-            <p className={`font-mono text-xl font-semibold ${color}`}>{value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-[#555050] font-mono text-xs">
-          {data.invoices.length} invoice{data.invoices.length !== 1 ? 's' : ''}
-        </p>
-        <Button size="sm" onClick={() => setOpen(true)}>+ New Invoice</Button>
-      </div>
-
-      {sendError && (
-        <p className="text-[#E05252] font-mono text-xs border border-[#E0525233] bg-[#E0525211] px-3 py-2 mb-4">
-          Invoice not sent: {sendError}
-        </p>
-      )}
-
-      {/* Invoices table */}
-      {data.invoices.length === 0 ? (
-        <div className="border border-[#1A1A1A] px-6 py-12 text-center">
-          <p className="text-[#555050] font-mono text-sm">No invoices yet.</p>
+      <Header
+        title="Finances"
+        subtitle={`${data.invoices.length} invoice${data.invoices.length !== 1 ? 's' : ''}`}
+        actions={<Button size="sm" onClick={() => setOpen(true)}>+ New Invoice</Button>}
+      />
+      <PageWrapper>
+        <div className="mb-4 grid gap-4 sm:grid-cols-3">
+          <Stat label="Revenue this month" value={formatNZD(data.revenueMTD)} tone="text-pounamu" />
+          <Stat label="Outstanding" value={formatNZD(data.outstanding)} tone="text-amber" />
+          <Stat label="Overdue" value={formatNZD(data.overdue)} tone={data.overdue > 0 ? 'text-coral' : 'text-bone'} />
         </div>
-      ) : (
-        <div className="border border-[#1A1A1A]">
-          <div className="grid grid-cols-[140px_1fr_100px_100px_100px_150px] gap-4 px-4 py-2 border-b border-[#1A1A1A] bg-[#0A0A0A]">
-            {['Invoice #', 'Client', 'Amount', 'Due', 'Status', ''].map((h) => (
-              <span key={h} className="text-[#555050] font-mono text-[10px] uppercase tracking-widest">{h}</span>
-            ))}
+
+        {sendError && (
+          <div className="mb-4">
+            <FormError>Invoice not sent: {sendError}</FormError>
           </div>
-          {data.invoices.map((inv) => {
-            const client = clientMap[inv.client_id]
-            const status = displayStatus(inv)
-            return (
-              <div
-                key={inv.id}
-                className="grid grid-cols-[140px_1fr_100px_100px_100px_150px] gap-4 px-4 py-3 border-b border-[#1A1A1A] last:border-b-0 hover:bg-[#111111] transition-colors items-center"
-              >
-                <p className="text-[#F5F0E8] font-mono text-sm">{inv.invoice_number}</p>
-                <div>
-                  <p className="text-[#F5F0E8] font-mono text-sm truncate">{client?.name ?? '—'}</p>
-                  {client?.company && (
-                    <p className="text-[#555050] font-mono text-xs truncate">{client.company}</p>
-                  )}
-                </div>
-                <p className="text-[#F5F0E8] font-mono text-sm">{formatNZD(inv.amount)}</p>
-                <p className="text-[#8A8580] font-mono text-xs">
-                  {inv.due_date ? formatDate(inv.due_date) : '—'}
-                </p>
-                <Badge variant={status}>{status}</Badge>
-                <div className="flex items-center gap-2">
-                  {inv.status === 'draft' && (
-                    <button
-                      onClick={() => handleSend(inv.id)}
-                      disabled={sendingId !== null}
-                      className="text-[#555050] hover:text-[#C9963A] disabled:opacity-40 font-mono text-[10px] cursor-pointer transition-colors"
-                    >
-                      {sendingId === inv.id ? 'Sending…' : '✉ Send'}
-                    </button>
-                  )}
-                  {inv.status !== 'paid' && (
-                    <button
-                      onClick={() => startTransition(() => markInvoicePaidAction(inv.id))}
-                      className="text-[#555050] hover:text-[#4CAF7D] font-mono text-[10px] cursor-pointer transition-colors"
-                    >
-                      ✓ Paid
-                    </button>
-                  )}
-                  <a
-                    href={`/finances/invoices/${inv.id}/pdf`}
-                    className="text-[#555050] hover:text-[#F5F0E8] font-mono text-[10px] cursor-pointer transition-colors"
-                  >
-                    PDF
-                  </a>
-                </div>
+        )}
+
+        {data.invoices.length === 0 ? (
+          <EmptyState title="No invoices yet" />
+        ) : (
+          <Card padding="none" className="overflow-x-auto">
+            <div className="min-w-[760px]">
+              <div className={`${COLUMNS} border-b border-line py-2.5`}>
+                {['Invoice', 'Client', 'Amount', 'Due', 'Status', ''].map((h) => (
+                  <span key={h} className="eyebrow">{h}</span>
+                ))}
               </div>
-            )
-          })}
-        </div>
-      )}
+              <div className="divide-y divide-line">
+                {data.invoices.map((inv) => {
+                  const client = clientMap[inv.client_id]
+                  const status = displayStatus(inv)
+                  return (
+                    <div key={inv.id} className={`${COLUMNS} py-3 transition-colors duration-150 hover:bg-bone/[0.03]`}>
+                      <p className="font-mono text-[13px] text-muted">{inv.invoice_number}</p>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Avatar name={client?.company ?? client?.name ?? '?'} size="sm" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-bone">{client?.name ?? '—'}</p>
+                          {client?.company && <p className="truncate text-[13px] text-dim">{client.company}</p>}
+                        </div>
+                      </div>
+                      <p className="font-mono text-sm text-bone">{formatNZD(inv.amount)}</p>
+                      <p className="font-mono text-xs text-dim">{inv.due_date ? formatDate(inv.due_date) : '—'}</p>
+                      <Badge variant={status} dot>{status}</Badge>
+                      <div className="flex items-center justify-end gap-3 text-[13px]">
+                        {inv.status === 'draft' && (
+                          <button
+                            onClick={() => handleSend(inv.id)}
+                            disabled={sendingId !== null}
+                            className="cursor-pointer text-amber transition-colors hover:text-bone disabled:opacity-40"
+                          >
+                            {sendingId === inv.id ? 'Sending…' : 'Send'}
+                          </button>
+                        )}
+                        {inv.status !== 'paid' && (
+                          <button
+                            onClick={() => startTransition(() => markInvoicePaidAction(inv.id))}
+                            className="cursor-pointer text-dim transition-colors hover:text-pounamu"
+                          >
+                            Mark paid
+                          </button>
+                        )}
+                        <a
+                          href={`/finances/invoices/${inv.id}/pdf`}
+                          className="cursor-pointer text-dim transition-colors hover:text-bone"
+                        >
+                          PDF
+                        </a>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </Card>
+        )}
+      </PageWrapper>
 
-      <SlideOver open={open} onClose={() => setOpen(false)} title="New Invoice" width="lg">
+      <SlideOver open={open} onClose={() => setOpen(false)} title="New invoice" width="lg">
         <NewInvoiceForm
           clients={data.clients}
           projects={data.projects}

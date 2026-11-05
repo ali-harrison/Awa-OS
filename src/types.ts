@@ -179,6 +179,20 @@ export const PROJECT_STATUS_OPTIONS: { value: ProjectStatus; label: string }[] =
   { value: 'complete', label: 'Complete' },
 ]
 
+/** Short stage names, for tight spaces such as the river and pipeline columns. */
+export const STAGE_LABELS: Record<ProjectStatus, string> = {
+  onboarding: 'Onboarding',
+  questionnaire_sent: 'Questionnaire',
+  questionnaire_received: 'Q. received',
+  proposal_sent: 'Proposal',
+  contract_sent: 'Contract',
+  deposit_pending: 'Deposit',
+  deposit_paid: 'Deposit paid',
+  in_progress: 'In progress',
+  review: 'Review',
+  complete: 'Complete',
+}
+
 /** Pipeline stages, in order. */
 export const PROJECT_STAGES: ProjectStatus[] = PROJECT_STATUS_OPTIONS.map((o) => o.value)
 

@@ -8,16 +8,18 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   hint?: string
 }
 
-const baseInputClasses = [
-  'w-full bg-[#111111] text-[#F5F0E8]',
-  'border border-[#2A2A2A] hover:border-[#3A3A3A] focus:border-[#C9963A]',
-  'text-sm font-mono',
-  'px-3 py-2 h-9',
-  'placeholder:text-[#555050]',
-  'outline-none',
-  'transition-colors duration-150',
+const fieldClasses = [
+  'w-full rounded-[10px] bg-ink text-bone text-sm',
+  'border border-line-strong hover:border-dim',
+  'focus:border-amber focus:ring-3 focus:ring-amber/15',
+  'placeholder:text-dim outline-none',
+  'transition-all duration-150',
   'disabled:opacity-40 disabled:cursor-not-allowed',
 ].join(' ')
+
+const baseInputClasses = `${fieldClasses} h-10 px-3`
+const labelClasses = 'text-[13px] font-medium text-muted'
+const errorBorder = 'border-coral focus:border-coral focus:ring-coral/15'
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, hint, className = '', id, ...props }, ref) => {
@@ -27,7 +29,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="text-xs font-mono text-[#8A8580] uppercase tracking-wide"
+            className={labelClasses}
           >
             {label}
           </label>
@@ -37,13 +39,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           id={inputId}
           className={[
             baseInputClasses,
-            error ? 'border-[#E05252] focus:border-[#E05252]' : '',
+            error ? errorBorder : '',
             className,
           ].join(' ')}
           {...props}
         />
-        {error && <p className="text-xs font-mono text-[#E05252]">{error}</p>}
-        {hint && !error && <p className="text-xs font-mono text-[#555050]">{hint}</p>}
+        {error && <p className="text-xs text-coral">{error}</p>}
+        {hint && !error && <p className="text-xs text-dim">{hint}</p>}
       </div>
     )
   }
@@ -64,7 +66,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         {label && (
           <label
             htmlFor={textareaId}
-            className="text-xs font-mono text-[#8A8580] uppercase tracking-wide"
+            className={labelClasses}
           >
             {label}
           </label>
@@ -73,26 +75,24 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           id={textareaId}
           className={[
-            'w-full bg-[#111111] text-[#F5F0E8]',
-            'border border-[#2A2A2A] hover:border-[#3A3A3A] focus:border-[#C9963A]',
-            'text-sm font-mono',
-            'px-3 py-2',
-            'placeholder:text-[#555050]',
-            'outline-none resize-y min-h-[80px]',
-            'transition-colors duration-150',
-            'disabled:opacity-40 disabled:cursor-not-allowed',
-            error ? 'border-[#E05252] focus:border-[#E05252]' : '',
+            fieldClasses,
+            'px-3 py-2 resize-y min-h-[88px]',
+            error ? errorBorder : '',
             className,
           ].join(' ')}
           {...props}
         />
-        {error && <p className="text-xs font-mono text-[#E05252]">{error}</p>}
-        {hint && !error && <p className="text-xs font-mono text-[#555050]">{hint}</p>}
+        {error && <p className="text-xs text-coral">{error}</p>}
+        {hint && !error && <p className="text-xs text-dim">{hint}</p>}
       </div>
     )
   }
 )
 Textarea.displayName = 'Textarea'
+
+export function FormError({ children }: { children: React.ReactNode }) {
+  return <p className="rounded-[10px] bg-coral/10 px-3 py-2 text-sm text-coral">{children}</p>
+}
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string
@@ -109,7 +109,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         {label && (
           <label
             htmlFor={selectId}
-            className="text-xs font-mono text-[#8A8580] uppercase tracking-wide"
+            className={labelClasses}
           >
             {label}
           </label>
@@ -120,20 +120,19 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           className={[
             baseInputClasses,
             'cursor-pointer',
-            'bg-[#111111]',
-            error ? 'border-[#E05252] focus:border-[#E05252]' : '',
+            error ? errorBorder : '',
             className,
           ].join(' ')}
           {...props}
         >
           {options.map((opt) => (
-            <option key={opt.value} value={opt.value} className="bg-[#111111] text-[#F5F0E8]">
+            <option key={opt.value} value={opt.value} className="bg-surface text-bone">
               {opt.label}
             </option>
           ))}
         </select>
-        {error && <p className="text-xs font-mono text-[#E05252]">{error}</p>}
-        {hint && !error && <p className="text-xs font-mono text-[#555050]">{hint}</p>}
+        {error && <p className="text-xs text-coral">{error}</p>}
+        {hint && !error && <p className="text-xs text-dim">{hint}</p>}
       </div>
     )
   }
