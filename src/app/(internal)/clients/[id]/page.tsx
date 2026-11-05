@@ -1,9 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { Header } from '@/components/layout/Header'
-import { PageWrapper } from '@/components/layout/PageWrapper'
 import { ClientDetailClient } from './ClientDetailClient'
-import type { Client, Project } from '@/types'
+import { CLIENT_COLUMNS, type Client, type Project } from '@/types'
 
 export default async function ClientDetailPage({
   params,
@@ -14,7 +12,7 @@ export default async function ClientDetailPage({
   const supabase = await createClient()
 
   const [{ data: client }, { data: projects }] = await Promise.all([
-    supabase.from('clients').select('*').eq('id', id).single(),
+    supabase.from('clients').select(CLIENT_COLUMNS).eq('id', id).single(),
     supabase
       .from('projects')
       .select('*')
@@ -24,20 +22,5 @@ export default async function ClientDetailPage({
 
   if (!client) notFound()
 
-  return (
-    <>
-      <Header
-        title={client.name}
-        subtitle={client.company ?? client.email}
-        backHref="/clients"
-        backLabel="Clients"
-      />
-      <PageWrapper>
-        <ClientDetailClient
-          client={client as Client}
-          projects={(projects ?? []) as Project[]}
-        />
-      </PageWrapper>
-    </>
-  )
+  return <ClientDetailClient client={client as Client} projects={(projects ?? []) as Project[]} />
 }

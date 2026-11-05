@@ -1,9 +1,23 @@
 import type { Metadata } from 'next'
-import { JetBrains_Mono } from 'next/font/google'
+import { Fraunces, Instrument_Sans, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
+// latin-ext carries the macrons in te reo Māori: without it ā ē ī ō ū fall back to another font
+const sans = Instrument_Sans({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-instrument-sans',
+  display: 'swap',
+})
+
+const display = Fraunces({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-fraunces',
+  axes: ['SOFT', 'opsz'],
+  display: 'swap',
+})
+
+const mono = JetBrains_Mono({
+  subsets: ['latin', 'latin-ext'],
   variable: '--font-jetbrains-mono',
   display: 'swap',
 })
@@ -19,7 +33,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${jetbrainsMono.variable} h-full`}>
+    <html lang="en" className={`${sans.variable} ${display.variable} ${mono.variable} h-full`}>
       <body className="h-full">{children}</body>
     </html>
   )

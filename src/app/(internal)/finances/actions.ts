@@ -1,18 +1,22 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe/client'
-import { getResend, FROM_ADDRESS } from '@/lib/resend/client'
 import { templates } from '@/lib/resend/templates'
+import { deliverTemplate } from '@/lib/resend/deliver'
 import { generateInvoicePDF } from '@/lib/generateInvoicePDF'
+import { buildInvoicePDFProps, formatDueDate } from '@/lib/invoices'
+import { formatNZD } from '@/lib/format'
 import { logActivity } from '@/lib/logger'
-import type { LineItem } from '@/types'
+import { formatInvoiceNumber, type Invoice, type LineItem } from '@/types'
+
+type Supabase = Awaited<ReturnType<typeof requireUser>>['supabase']
 
 /** Auto-generate next invoice number for the current year: TWD-{YEAR}-{seq} */
-async function nextInvoiceNumber(supabase: Awaited<ReturnType<typeof createClient>>) {
+async function nextInvoiceNumber(supabase: Supabase) {
   const year = new Date().getFullYear()
-  const prefix = `TWD-${year}-`
+  const prefix = formatInvoiceNumber(year, 0).slice(0, -4)
   const { data } = await supabase
     .from('invoices')
     .select('invoice_number')
@@ -20,96 +24,95 @@ async function nextInvoiceNumber(supabase: Awaited<ReturnType<typeof createClien
     .order('invoice_number', { ascending: false })
     .limit(1)
 
-  let seq = 1
-  if (data?.[0]) {
-    const last = data[0].invoice_number.replace(prefix, '')
-    seq = parseInt(last, 10) + 1
-  }
-  return `${prefix}${String(seq).padStart(4, '0')}`
+  const last = data?.[0] ? parseInt(data[0].invoice_number.replace(prefix, ''), 10) : 0
+  return formatInvoiceNumber(year, last + 1)
 }
 
-export async function createInvoiceAction(
-  _prev: { error: string } | null,
-  formData: FormData
-): Promise<{ error: string } | null> {
+/** Returns null when Stripe isn't configured; the invoice can still be paid by bank transfer. */
+async function createPaymentLink(lineItems: LineItem[], invoiceNumber: string, clientId: string) {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key || key.startsWith('sk_dummy')) return null
+
+  try {
+    const paymentLink = await getStripe().paymentLinks.create({
+      line_items: lineItems.map((li) => ({
+        price_data: {
+          currency: 'nzd',
+          // Stripe needs whole-number quantities, so bill 1.5 hours as one line
+          unit_amount: Number.isInteger(li.quantity) ? li.unit_price : li.amount,
+          product_data: { name: li.description },
+        },
+        quantity: Number.isInteger(li.quantity) ? li.quantity : 1,
+      })),
+      // Copied onto the Checkout Session — the Stripe webhook matches on invoice_number
+      metadata: { invoice_number: invoiceNumber, client_id: clientId },
+    })
+    return paymentLink.url
+  } catch (err) {
+    console.error(`[createInvoice] Stripe payment link failed for ${invoiceNumber}:`, err)
+    return null
+  }
+}
+
+export async function createInvoiceAction(formData: FormData): Promise<{ error: string } | null> {
+  const { supabase } = await requireUser()
+
   const clientId = formData.get('client_id') as string
-  const projectId = formData.get('project_id') as string
+  const projectId = (formData.get('project_id') as string) || null
   const dueDate = (formData.get('due_date') as string) || null
   const gstIncluded = formData.get('gst_included') === 'on'
-  const lineItemsRaw = formData.get('line_items') as string
 
   if (!clientId) return { error: 'Client is required.' }
 
-  let lineItems: LineItem[] = []
+  let lineItems: LineItem[]
   try {
-    lineItems = JSON.parse(lineItemsRaw)
+    const parsed = JSON.parse(formData.get('line_items') as string) as LineItem[]
+    // Amounts are always derived here, in cents, so the total can't drift from the lines
+    lineItems = parsed.map((li) => ({
+      description: li.description.trim(),
+      quantity: li.quantity,
+      unit_price: Math.round(li.unit_price),
+      amount: Math.round(li.quantity * li.unit_price),
+    }))
   } catch {
     return { error: 'Invalid line items.' }
   }
 
   if (lineItems.length === 0) return { error: 'At least one line item is required.' }
-
-  const supabase = await createClient()
-
-  // Calculate amount (cents)
-  const subtotal = lineItems.reduce((sum, li) => sum + li.amount, 0)
-  const amount = subtotal // Already includes GST if gstIncluded
-
-  const invoiceNumber = await nextInvoiceNumber(supabase)
-
-  // Get client for Stripe
-  const { data: client } = await supabase
-    .from('clients')
-    .select('name, email')
-    .eq('id', clientId)
-    .single()
-
-  if (!client) return { error: 'Client not found.' }
-
-  // Create Stripe payment link
-  let stripePaymentIntentId: string | null = null
-  try {
-    if (process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY.startsWith('sk_dummy')) {
-      const paymentLink = await getStripe().paymentLinks.create({
-        line_items: lineItems.map((li) => ({
-          price_data: {
-            currency: 'nzd',
-            unit_amount: li.unit_price,
-            product_data: { name: li.description },
-          },
-          quantity: li.quantity,
-        })),
-        metadata: { invoice_number: invoiceNumber, client_id: clientId },
-      })
-      stripePaymentIntentId = paymentLink.url
-    }
-  } catch (_) {
-    // Stripe not configured — skip payment link silently
+  if (lineItems.some((li) => !li.description || li.amount <= 0)) {
+    return { error: 'Every line item needs a description and an amount.' }
   }
 
-  const { error } = await supabase.from('invoices').insert({
-    client_id: clientId,
-    project_id: projectId || null,
-    invoice_number: invoiceNumber,
-    status: 'draft',
-    amount,
-    gst_included: gstIncluded,
-    due_date: dueDate,
-    line_items: lineItems,
-    stripe_payment_link: stripePaymentIntentId,
-  })
+  const amount = lineItems.reduce((sum, li) => sum + li.amount, 0)
+  const invoiceNumber = await nextInvoiceNumber(supabase)
+  const paymentLink = await createPaymentLink(lineItems, invoiceNumber, clientId)
+
+  const { data: created, error } = await supabase
+    .from('invoices')
+    .insert({
+      client_id: clientId,
+      project_id: projectId,
+      invoice_number: invoiceNumber,
+      status: 'draft',
+      amount,
+      gst_included: gstIncluded,
+      due_date: dueDate,
+      line_items: lineItems,
+      stripe_payment_link: paymentLink,
+    })
+    .select('id')
+    .single()
 
   if (error) return { error: error.message }
 
-  const { data: created } = await supabase.from('invoices').select('id').eq('invoice_number', invoiceNumber).single()
-  await logActivity({ type: 'audit', entity: 'invoice', entity_id: created?.id, action: 'created', meta: { invoice_number: invoiceNumber, amount, client_id: clientId } })
+  await logActivity({ type: 'audit', entity: 'invoice', entity_id: created.id, action: 'created', meta: { invoice_number: invoiceNumber, amount, client_id: clientId } })
 
   revalidatePath('/finances')
   return null
 }
 
 export async function markInvoicePaidAction(invoiceId: string) {
-  const supabase = await createClient()
+  const { supabase } = await requireUser()
   await supabase
     .from('invoices')
     .update({ status: 'paid', paid_at: new Date().toISOString() })
@@ -118,135 +121,49 @@ export async function markInvoicePaidAction(invoiceId: string) {
   revalidatePath('/finances')
 }
 
-export async function updateInvoiceStatusAction(invoiceId: string, status: string) {
-  const supabase = await createClient()
-  const { data: existing } = await supabase.from('invoices').select('status').eq('id', invoiceId).single()
-  await supabase.from('invoices').update({ status }).eq('id', invoiceId)
-  await logActivity({ type: 'change', entity: 'invoice', entity_id: invoiceId, action: 'status_changed', meta: { field: 'status', old_value: existing?.status ?? null, new_value: status } })
-  revalidatePath('/finances')
-}
-
 export async function sendInvoiceAction(invoiceId: string): Promise<{ error?: string }> {
-  const supabase = await createClient()
+  const { supabase } = await requireUser()
 
-  const { data: inv } = await supabase
-    .from('invoices')
-    .select('*')
-    .eq('id', invoiceId)
-    .single()
-
-  if (!inv) return { error: 'Invoice not found.' }
+  const { data } = await supabase.from('invoices').select('*').eq('id', invoiceId).maybeSingle()
+  if (!data) return { error: 'Invoice not found.' }
+  const invoice = data as Invoice
 
   const { data: client } = await supabase
     .from('clients')
-    .select('*')
-    .eq('id', inv.client_id)
-    .single()
-
+    .select('id, name, company, email, slug')
+    .eq('id', invoice.client_id)
+    .maybeSingle()
   if (!client) return { error: 'Client not found.' }
 
-  const formattedAmount = new Intl.NumberFormat('en-NZ', {
-    style: 'currency', currency: 'NZD', minimumFractionDigits: 2,
-  }).format(inv.amount / 100)
-
-  const billingDate = new Date(inv.created_at).toLocaleDateString('en-NZ', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  })
-
-  const formattedDue = inv.due_date
-    ? new Date(inv.due_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })
-    : 'on receipt'
-
-  const paymentLink = inv.stripe_payment_link ?? ''
-
-  const subtotal = (inv.line_items as LineItem[]).reduce((s: number, li: LineItem) => s + li.amount, 0)
-  const tax = inv.gst_included ? Math.round(subtotal * (15 / 115)) : 0
-
-  // Render PDF server-side
-  let pdfBuffer: Buffer | null = null
+  // The email says the invoice is attached, so don't send it if the PDF failed
+  let pdf: Buffer
   try {
-    pdfBuffer = await generateInvoicePDF({
-      invoiceNumber: inv.invoice_number,
-      billingDate,
-      dueDate: formattedDue,
-      from: {
-        name: 'Ali Harrison',
-        email: 'ali@tewairama.digital',
-        address: 'Auckland, New Zealand',
-      },
-      to: {
-        name: client.name,
-        company: client.company ?? '',
-        email: client.email,
-        address: '',
-      },
-      lineItems: (inv.line_items as LineItem[]).map((li: LineItem) => ({
-        description: li.description,
-        quantity: li.quantity,
-        amount: li.amount,
-      })),
-      subtotal,
-      tax,
-      total: inv.amount,
-      paymentLink: paymentLink || undefined,
-      bankDetails: {
-        accountName: 'Te Wairama Digital',
-        accountNumber: process.env.NEXT_PUBLIC_BANK_ACCOUNT ?? '',
-        bankName: 'ASB Bank',
-        reference: inv.invoice_number,
-      },
-    })
+    pdf = await generateInvoicePDF(buildInvoicePDFProps(invoice, client))
   } catch (err) {
     console.error('[sendInvoice] PDF render failed:', err)
+    return { error: 'The invoice PDF could not be generated, so nothing was sent.' }
   }
 
-  const subject = templates.invoice_sent.subject({
+  const vars: Parameters<typeof templates.invoice_sent.html>[0] = {
     clientName: client.name,
-    invoiceNumber: inv.invoice_number,
-    amount: formattedAmount,
-    dueDate: formattedDue,
-    paymentLink,
-  })
-  const html = templates.invoice_sent.html({
-    clientName: client.name,
-    invoiceNumber: inv.invoice_number,
-    amount: formattedAmount,
-    dueDate: formattedDue,
-    paymentLink,
-  })
-
-  const emailPayload: Parameters<ReturnType<typeof getResend>['emails']['send']>[0] = {
-    from: FROM_ADDRESS,
-    to: client.email,
-    subject,
-    html,
-    ...(pdfBuffer
-      ? { attachments: [{ filename: `${inv.invoice_number}.pdf`, content: pdfBuffer }] }
-      : {}),
+    invoiceNumber: invoice.invoice_number,
+    amount: formatNZD(invoice.amount),
+    dueDate: formatDueDate(invoice.due_date),
+    paymentLink: invoice.stripe_payment_link ?? '',
   }
 
-  const result = await getResend().emails.send(emailPayload)
-  if (result.error) return { error: result.error.message }
-
-  // Mark as sent
-  await supabase.from('invoices').update({ status: 'sent' }).eq('id', invoiceId)
-
-  await supabase.from('email_log').insert({
-    client_id: client.id,
-    project_id: inv.project_id ?? null,
-    template_key: 'invoice_sent',
-    subject,
-    sent_at: new Date().toISOString(),
-    status: 'sent',
+  const result = await deliverTemplate({
+    templateKey: 'invoice_sent',
+    client,
+    projectId: invoice.project_id,
+    vars: { ...vars },
+    attachments: [{ filename: `${invoice.invoice_number}.pdf`, content: pdf }],
+    logEntity: { entity: 'invoice', entity_id: invoiceId },
   })
+  if (result.error) return result
 
-  await logActivity({
-    type: 'email',
-    entity: 'invoice',
-    entity_id: invoiceId,
-    action: 'sent',
-    meta: { to: client.email, subject, resend_id: result.data?.id ?? null },
-  })
+  // Resending a paid invoice mustn't flip it back
+  await supabase.from('invoices').update({ status: 'sent' }).eq('id', invoiceId).eq('status', 'draft')
 
   revalidatePath('/finances')
   return {}

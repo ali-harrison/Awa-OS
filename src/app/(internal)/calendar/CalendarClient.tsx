@@ -1,34 +1,33 @@
 'use client'
 
-import { useState, useActionState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
+import { Header } from '@/components/layout/Header'
+import { PageWrapper } from '@/components/layout/PageWrapper'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Input, Select, Textarea } from '@/components/ui/Input'
+import { Card } from '@/components/ui/Card'
+import { FormError, Input, Select, Textarea } from '@/components/ui/Input'
 import { SlideOver } from '@/components/ui/SlideOver'
 import { createCalendarEventAction, deleteCalendarEventAction } from './actions'
+import { useFormSubmit } from '@/lib/use-form-submit'
+import { localInputToISO } from '@/lib/format'
+import { EVENT_TYPE_OPTIONS } from '@/types'
 import type { CalendarEvent, Project, CalendarEventType } from '@/types'
 
 type ViewMode = 'month' | 'week'
 
-const EVENT_TYPE_OPTIONS: { value: CalendarEventType; label: string }[] = [
-  { value: 'deadline', label: 'Deadline' },
-  { value: 'meeting', label: 'Meeting' },
-  { value: 'milestone', label: 'Milestone' },
-  { value: 'reminder', label: 'Reminder' },
-]
-
 const eventColors: Record<CalendarEventType, string> = {
-  deadline: 'bg-[#C9963A11] text-[#C9963A] border-[#C9963A33]',
-  meeting: 'bg-[#1A1A1A] text-[#F5F0E8] border-[#2A2A2A]',
-  milestone: 'bg-[#4CAF7D11] text-[#4CAF7D] border-[#4CAF7D33]',
-  reminder: 'bg-transparent text-[#8A8580] border-[#1A1A1A]',
+  deadline: 'bg-amber/12 text-amber',
+  meeting: 'bg-water/12 text-water',
+  milestone: 'bg-pounamu/12 text-pounamu',
+  reminder: 'bg-bone/[0.06] text-muted',
 }
 
 const eventDotColors: Record<CalendarEventType, string> = {
-  deadline: 'bg-[#C9963A]',
-  meeting: 'bg-[#F5F0E8]',
-  milestone: 'bg-[#4CAF7D]',
-  reminder: 'bg-[#555050]',
+  deadline: 'bg-amber',
+  meeting: 'bg-water',
+  milestone: 'bg-pounamu',
+  reminder: 'bg-dim',
 }
 
 function isSameDay(a: Date, b: Date) {
@@ -45,13 +44,11 @@ function formatMonthYear(date: Date) {
 
 function MonthView({
   events,
-  projects,
   currentDate,
   onDayClick,
   onEventClick,
 }: {
   events: (CalendarEvent & { project?: Pick<Project, 'name'> | null })[]
-  projects: Project[]
   currentDate: Date
   onDayClick: (date: Date) => void
   onEventClick: (event: CalendarEvent) => void
@@ -75,16 +72,16 @@ function MonthView({
 
   return (
     <div>
-      <div className="grid grid-cols-7 border-b border-[#1A1A1A] mb-0">
+      <div className="grid grid-cols-7 border-b border-line">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-          <div key={d} className="px-2 py-2 text-center">
-            <span className="text-[#555050] font-mono text-[9px] uppercase tracking-widest">{d}</span>
+          <div key={d} className="px-2 py-2.5 text-center">
+            <span className="eyebrow">{d}</span>
           </div>
         ))}
       </div>
       <div className="grid grid-cols-7">
         {days.map((day, i) => {
-          if (!day) return <div key={`pad-${i}`} className="border-r border-b border-[#1A1A1A] min-h-[100px]" />
+          if (!day) return <div key={`pad-${i}`} className="min-h-[108px] border-r border-b border-line bg-ink/40 [&:nth-child(7n)]:border-r-0" />
           const dayEvents = events.filter((e) => isSameDay(new Date(e.start_at), day))
           const isToday = isSameDay(day, today)
           const isWeekend = day.getDay() === 0 || day.getDay() === 6
@@ -93,15 +90,15 @@ function MonthView({
             <div
               key={day.toISOString()}
               className={[
-                'border-r border-b border-[#1A1A1A] min-h-[100px] p-1.5 cursor-pointer transition-colors duration-100',
-                isWeekend ? 'bg-[#0A0A0A]' : '',
-                'hover:bg-[#111111]',
+                'min-h-[108px] cursor-pointer border-r border-b border-line p-2 transition-colors duration-150 [&:nth-child(7n)]:border-r-0',
+                isWeekend ? 'bg-ink/40' : '',
+                'hover:bg-bone/[0.03]',
               ].join(' ')}
               onClick={() => onDayClick(day)}
             >
               <p className={[
-                'font-mono text-xs mb-1 w-5 h-5 flex items-center justify-center',
-                isToday ? 'bg-[#F5F0E8] text-[#0A0A0A] font-bold' : 'text-[#555050]',
+                'mb-1 flex size-6 items-center justify-center rounded-full font-mono text-xs',
+                isToday ? 'bg-amber font-semibold text-ink' : 'text-dim',
               ].join(' ')}>
                 {day.getDate()}
               </p>
@@ -111,7 +108,7 @@ function MonthView({
                     key={ev.id}
                     onClick={(e) => { e.stopPropagation(); onEventClick(ev) }}
                     className={[
-                      'w-full text-left px-1.5 py-0.5 border font-mono text-[9px] truncate cursor-pointer',
+                      'w-full cursor-pointer truncate rounded-md px-1.5 py-0.5 text-left text-[11px] font-medium transition-opacity hover:opacity-80',
                       eventColors[ev.type as CalendarEventType],
                     ].join(' ')}
                   >
@@ -119,7 +116,7 @@ function MonthView({
                   </button>
                 ))}
                 {dayEvents.length > 3 && (
-                  <p className="text-[#555050] font-mono text-[9px] px-1">+{dayEvents.length - 3} more</p>
+                  <p className="px-1 text-[11px] text-dim">+{dayEvents.length - 3} more</p>
                 )}
               </div>
             </div>
@@ -156,17 +153,17 @@ function WeekView({
 
   return (
     <div>
-      <div className="grid grid-cols-7 border-b border-[#1A1A1A]">
+      <div className="grid grid-cols-7 border-b border-line">
         {days.map((day) => {
           const isToday = isSameDay(day, today)
           return (
-            <div key={day.toISOString()} className="px-2 py-2 text-center border-r border-[#1A1A1A] last:border-r-0">
-              <p className="text-[#555050] font-mono text-[9px] uppercase tracking-widest">
+            <div key={day.toISOString()} className="border-r border-line px-2 py-2.5 text-center last:border-r-0">
+              <p className="eyebrow">
                 {day.toLocaleDateString('en-NZ', { weekday: 'short' })}
               </p>
               <p className={[
-                'font-mono text-sm mt-0.5 w-7 h-7 flex items-center justify-center mx-auto',
-                isToday ? 'bg-[#F5F0E8] text-[#0A0A0A] font-bold' : 'text-[#F5F0E8]',
+                'mx-auto mt-1 flex size-7 items-center justify-center rounded-full font-mono text-sm',
+                isToday ? 'bg-amber font-semibold text-ink' : 'text-bone',
               ].join(' ')}>
                 {day.getDate()}
               </p>
@@ -180,7 +177,7 @@ function WeekView({
           return (
             <div
               key={day.toISOString()}
-              className="border-r border-[#1A1A1A] last:border-r-0 p-2 cursor-pointer hover:bg-[#111111] transition-colors duration-100"
+              className="cursor-pointer border-r border-line p-2 transition-colors duration-150 last:border-r-0 hover:bg-bone/[0.03]"
               onClick={() => onDayClick(day)}
             >
               <div className="flex flex-col gap-1.5">
@@ -189,12 +186,12 @@ function WeekView({
                     key={ev.id}
                     onClick={(e) => { e.stopPropagation(); onEventClick(ev) }}
                     className={[
-                      'w-full text-left px-2 py-1.5 border font-mono text-xs cursor-pointer',
+                      'w-full cursor-pointer rounded-lg px-2 py-1.5 text-left text-xs font-medium',
                       eventColors[ev.type as CalendarEventType],
                     ].join(' ')}
                   >
                     <p className="truncate">{ev.title}</p>
-                    <p className="text-[10px] opacity-70">
+                    <p className="font-mono text-[10px] opacity-70">
                       {new Date(ev.start_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </button>
@@ -219,7 +216,11 @@ function CreateEventForm({
   defaultDate: Date | null
   onSuccess: () => void
 }) {
-  const [state, formAction, pending] = useActionState(createCalendarEventAction, null)
+  const { onSubmit, error, pending } = useFormSubmit((fd) => {
+    fd.set('start_at', localInputToISO(fd.get('start_at') as string))
+    fd.set('end_at', localInputToISO(fd.get('end_at') as string))
+    return createCalendarEventAction(fd)
+  }, onSuccess)
 
   const defaultStart = defaultDate
     ? `${defaultDate.getFullYear()}-${String(defaultDate.getMonth() + 1).padStart(2, '0')}-${String(defaultDate.getDate()).padStart(2, '0')}T09:00`
@@ -229,13 +230,7 @@ function CreateEventForm({
     : ''
 
   return (
-    <form
-      action={async (fd) => {
-        const result = await createCalendarEventAction(null, fd)
-        if (!result) onSuccess()
-      }}
-      className="flex flex-col gap-4"
-    >
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <Input name="title" label="Title" required />
       <Select name="type" label="Type" defaultValue="milestone" options={EVENT_TYPE_OPTIONS} />
       <Select
@@ -252,14 +247,12 @@ function CreateEventForm({
       </div>
       <Textarea name="description" label="Description" />
       <div className="flex items-center gap-2">
-        <input type="checkbox" name="visible_to_client" id="cal_visible" className="accent-[#C9963A]" />
-        <label htmlFor="cal_visible" className="text-[#8A8580] font-mono text-xs cursor-pointer">
+        <input type="checkbox" name="visible_to_client" id="cal_visible" className="accent-amber" />
+        <label htmlFor="cal_visible" className="cursor-pointer text-[13px] text-muted">
           Visible to client
         </label>
       </div>
-      {state?.error && (
-        <p className="text-[#E05252] font-mono text-xs">{state.error}</p>
-      )}
+      {error && <FormError>{error}</FormError>}
       <Button type="submit" loading={pending}>Add event</Button>
     </form>
   )
@@ -284,45 +277,40 @@ function EventDetail({
     onClose()
   }
 
+  const when = (value: string) =>
+    new Date(value).toLocaleString('en-NZ', {
+      weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+    })
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <div>
-        <Badge variant={event.type as 'deadline' | 'meeting' | 'milestone' | 'reminder'}>{event.type}</Badge>
-        <p className="text-[#F5F0E8] font-mono text-base font-medium mt-2">{event.title}</p>
-        {projectName && (
-          <p className="text-[#555050] font-mono text-xs mt-1">{projectName}</p>
-        )}
+        <Badge variant={event.type} dot>{event.type}</Badge>
+        <p className="mt-3 font-display text-2xl text-bone">{event.title}</p>
+        {projectName && <p className="mt-1 text-sm text-dim">{projectName}</p>}
       </div>
-      <div className="border border-[#1A1A1A] divide-y divide-[#1A1A1A]">
-        <div className="px-3 py-2.5">
-          <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-1">Start</p>
-          <p className="text-[#F5F0E8] font-mono text-sm">
-            {new Date(event.start_at).toLocaleString('en-NZ', {
-              weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
-            })}
-          </p>
+      <dl className="divide-y divide-line rounded-xl border border-line">
+        <div className="px-4 py-3">
+          <dt className="eyebrow mb-1">Start</dt>
+          <dd className="text-sm text-bone">{when(event.start_at)}</dd>
         </div>
-        <div className="px-3 py-2.5">
-          <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-1">End</p>
-          <p className="text-[#F5F0E8] font-mono text-sm">
-            {new Date(event.end_at).toLocaleString('en-NZ', {
-              weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
-            })}
-          </p>
+        <div className="px-4 py-3">
+          <dt className="eyebrow mb-1">End</dt>
+          <dd className="text-sm text-bone">{when(event.end_at)}</dd>
         </div>
         {event.description && (
-          <div className="px-3 py-2.5">
-            <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-1">Notes</p>
-            <p className="text-[#8A8580] font-mono text-sm">{event.description}</p>
+          <div className="px-4 py-3">
+            <dt className="eyebrow mb-1">Notes</dt>
+            <dd className="text-sm text-muted">{event.description}</dd>
           </div>
         )}
-        <div className="px-3 py-2.5">
-          <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-1">Client visible</p>
-          <p className={event.visible_to_client ? 'text-[#4CAF7D] font-mono text-sm' : 'text-[#555050] font-mono text-sm'}>
+        <div className="px-4 py-3">
+          <dt className="eyebrow mb-1">Client visible</dt>
+          <dd className={`text-sm ${event.visible_to_client ? 'text-pounamu' : 'text-dim'}`}>
             {event.visible_to_client ? 'Yes' : 'No'}
-          </p>
+          </dd>
         </div>
-      </div>
+      </dl>
       <Button variant="danger" loading={deleting} onClick={handleDelete}>
         Delete event
       </Button>
@@ -334,6 +322,13 @@ function EventDetail({
 
 type WithProject = CalendarEvent & { project?: Pick<Project, 'id' | 'name'> | null }
 
+const subscribeToNothing = () => () => {}
+
+/** False during server render and hydration. The grid depends on the browser's "today" and time zone, so it can only render client-side. */
+function useHasMounted() {
+  return useSyncExternalStore(subscribeToNothing, () => true, () => false)
+}
+
 export function CalendarClient({
   events,
   projects,
@@ -341,20 +336,22 @@ export function CalendarClient({
   events: WithProject[]
   projects: Project[]
 }) {
+  const mounted = useHasMounted()
   const [view, setView] = useState<ViewMode>('month')
-  const [currentDate, setCurrentDate] = useState(new Date())
+  const [currentDate, setCurrentDate] = useState(() => new Date())
   const [createOpen, setCreateOpen] = useState(false)
   const [defaultDate, setDefaultDate] = useState<Date | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<WithProject | null>(null)
 
   function navigate(dir: -1 | 1) {
-    const d = new Date(currentDate)
     if (view === 'month') {
-      d.setMonth(d.getMonth() + dir)
+      // Via the 1st: Jan 31 + 1 month would otherwise roll over into March
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + dir, 1))
     } else {
+      const d = new Date(currentDate)
       d.setDate(d.getDate() + dir * 7)
+      setCurrentDate(d)
     }
-    setCurrentDate(d)
   }
 
   function handleDayClick(date: Date) {
@@ -366,73 +363,82 @@ export function CalendarClient({
 
   return (
     <>
-      {/* Controls */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <Button size="sm" variant="ghost" onClick={() => navigate(-1)}>←</Button>
-          <p className="text-[#F5F0E8] font-mono text-sm font-medium w-44 text-center">
-            {view === 'month'
-              ? formatMonthYear(currentDate)
-              : `Week of ${currentDate.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}`}
-          </p>
-          <Button size="sm" variant="ghost" onClick={() => navigate(1)}>→</Button>
-          <Button size="sm" variant="ghost" onClick={() => setCurrentDate(new Date())}>
-            Today
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex border border-[#2A2A2A]">
-            {(['month', 'week'] as ViewMode[]).map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={[
-                  'px-3 py-1 font-mono text-xs uppercase tracking-wide transition-colors duration-100 cursor-pointer',
-                  view === v ? 'bg-[#1A1A1A] text-[#F5F0E8]' : 'text-[#555050] hover:text-[#F5F0E8]',
-                ].join(' ')}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-          <Button size="sm" onClick={() => { setDefaultDate(null); setCreateOpen(true) }}>
-            + Event
-          </Button>
-        </div>
-      </div>
-
-      {/* Legend */}
-      <div className="flex items-center gap-4 mb-4">
-        {Object.entries(eventDotColors).map(([type, color]) => (
-          <div key={type} className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 ${color}`} />
-            <span className="text-[#555050] font-mono text-[10px] uppercase tracking-widest">{type}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Calendar grid */}
-      <div className="border border-[#1A1A1A]">
-        {view === 'month' ? (
-          <MonthView
-            events={events}
-            projects={projects}
-            currentDate={currentDate}
-            onDayClick={handleDayClick}
-            onEventClick={(ev) => setSelectedEvent(ev as WithProject)}
-          />
+      <Header
+        title="Calendar"
+        subtitle="Events & deadlines"
+        actions={<Button size="sm" onClick={() => { setDefaultDate(null); setCreateOpen(true) }}>+ Event</Button>}
+      />
+      <PageWrapper>
+        {!mounted ? (
+          <div className="min-h-[640px]" />
         ) : (
-          <WeekView
-            events={events}
-            currentDate={currentDate}
-            onDayClick={handleDayClick}
-            onEventClick={(ev) => setSelectedEvent(ev as WithProject)}
-          />
+          <>
+            {/* Controls */}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="ghost" aria-label="Previous" onClick={() => navigate(-1)}>←</Button>
+                <p className="w-48 text-center font-display text-xl text-bone">
+                  {view === 'month'
+                    ? formatMonthYear(currentDate)
+                    : `Week of ${currentDate.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}`}
+                </p>
+                <Button size="sm" variant="ghost" aria-label="Next" onClick={() => navigate(1)}>→</Button>
+                <Button size="sm" variant="ghost" onClick={() => setCurrentDate(new Date())}>
+                  Today
+                </Button>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="hidden items-center gap-3 lg:flex">
+                  {Object.entries(eventDotColors).map(([type, color]) => (
+                    <div key={type} className="flex items-center gap-1.5">
+                      <span className={`size-2 rounded-full ${color}`} />
+                      <span className="text-xs text-dim capitalize">{type}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex rounded-lg bg-bone/[0.06] p-0.5">
+                  {(['month', 'week'] as ViewMode[]).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setView(v)}
+                      className={[
+                        'cursor-pointer rounded-md px-3 py-1 text-[13px] capitalize transition-colors duration-150',
+                        view === v ? 'bg-overlay font-medium text-bone' : 'text-dim hover:text-bone',
+                      ].join(' ')}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Calendar grid */}
+            <Card padding="none" className="overflow-x-auto">
+              <div className="min-w-[640px]">
+                {view === 'month' ? (
+                  <MonthView
+                    events={events}
+                    currentDate={currentDate}
+                    onDayClick={handleDayClick}
+                    onEventClick={(ev) => setSelectedEvent(ev as WithProject)}
+                  />
+                ) : (
+                  <WeekView
+                    events={events}
+                    currentDate={currentDate}
+                    onDayClick={handleDayClick}
+                    onEventClick={(ev) => setSelectedEvent(ev as WithProject)}
+                  />
+                )}
+              </div>
+            </Card>
+          </>
         )}
-      </div>
+      </PageWrapper>
 
       {/* Create event */}
-      <SlideOver open={createOpen} onClose={() => setCreateOpen(false)} title="New Event">
+      <SlideOver open={createOpen} onClose={() => setCreateOpen(false)} title="New event">
         <CreateEventForm
           projects={projects}
           defaultDate={defaultDate}

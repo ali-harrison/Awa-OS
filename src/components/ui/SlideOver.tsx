@@ -38,20 +38,20 @@ export function SlideOver({ open, onClose, title, children, width = 'md' }: Slid
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-[#0A0A0A]/75 transition-opacity duration-150"
+        className="absolute inset-0 animate-fade-in bg-ink/70 backdrop-blur-[3px]"
         onClick={onClose}
       />
       {/* Panel */}
       <div
         className={[
-          'relative w-full bg-[#111111] border-l border-[#1A1A1A]',
+          'relative w-full animate-slide-in bg-surface border-l border-line shadow-2xl',
           'flex flex-col h-full',
           widthClasses[width],
         ].join(' ')}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1A1A1A] flex-shrink-0">
-          <h2 className="text-[#F5F0E8] font-mono text-sm font-medium uppercase tracking-widest">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line flex-shrink-0">
+          <h2 className="font-display text-xl text-bone">
             {title}
           </h2>
           <Button size="sm" variant="ghost" onClick={onClose} type="button">
@@ -59,7 +59,7 @@ export function SlideOver({ open, onClose, title, children, width = 'md' }: Slid
           </Button>
         </div>
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-5 py-5">
+        <div className="flex-1 overflow-y-auto px-6 py-6">
           {children}
         </div>
       </div>

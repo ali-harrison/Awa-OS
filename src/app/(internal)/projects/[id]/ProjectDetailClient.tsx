@@ -1,32 +1,26 @@
 'use client'
 
-import { useState, useActionState, useTransition, useRef } from 'react'
+import { useState, useTransition, useRef } from 'react'
+import { Check } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Input, Select, Textarea } from '@/components/ui/Input'
+import { Card, EmptyState } from '@/components/ui/Card'
+import { FormError, Input, Select, Textarea } from '@/components/ui/Input'
+import { RiverJourney } from '@/components/river/RiverJourney'
 import {
   createTaskAction,
   updateTaskStatusAction,
-  createEventAction,
   saveNotesAction,
   updateStatusAction,
   createFileRecordAction,
 } from './actions'
-import { NEXT_ACTIONS } from '@/types'
+import { createCalendarEventAction } from '../../calendar/actions'
+import { createClient } from '@/lib/supabase/client'
+import { useFormSubmit } from '@/lib/use-form-submit'
+import { formatDate, formatDollars, localInputToISO } from '@/lib/format'
+import { FILES_BUCKET, storageFileName } from '@/lib/storage'
+import { EVENT_TYPE_OPTIONS, NEXT_ACTIONS, PROJECT_STATUS_OPTIONS, STAGE_LABELS } from '@/types'
 import type { Project, Client, Task, ProjectFile, CalendarEvent, ProjectStatus, FileType, CalendarEventType } from '@/types'
-
-const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
-  { value: 'onboarding', label: 'Onboarding' },
-  { value: 'questionnaire_sent', label: 'Questionnaire Sent' },
-  { value: 'questionnaire_received', label: 'Questionnaire Received' },
-  { value: 'proposal_sent', label: 'Proposal Sent' },
-  { value: 'contract_sent', label: 'Contract Sent' },
-  { value: 'deposit_pending', label: 'Deposit Pending' },
-  { value: 'deposit_paid', label: 'Deposit Paid' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'review', label: 'Review' },
-  { value: 'complete', label: 'Complete' },
-]
 
 const FILE_TYPE_OPTIONS: { value: FileType; label: string }[] = [
   { value: 'document', label: 'Document' },
@@ -37,100 +31,66 @@ const FILE_TYPE_OPTIONS: { value: FileType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ]
 
-const EVENT_TYPE_OPTIONS: { value: CalendarEventType; label: string }[] = [
-  { value: 'deadline', label: 'Deadline' },
-  { value: 'meeting', label: 'Meeting' },
-  { value: 'milestone', label: 'Milestone' },
-  { value: 'reminder', label: 'Reminder' },
-]
-
 type Tab = 'tasks' | 'files' | 'timeline' | 'notes' | 'questionnaire'
-
-function formatNZD(value: number) {
-  return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', minimumFractionDigits: 0 }).format(value)
-}
 
 // ─── Tasks Tab ────────────────────────────────────────────────────────────────
 
 function TasksTab({ tasks, projectId }: { tasks: Task[]; projectId: string }) {
-  const [taskState, taskAction, taskPending] = useActionState(createTaskAction, null)
+  const addTask = useFormSubmit(createTaskAction)
   const [, startTransition] = useTransition()
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Task list */}
+    <div className="grid items-start gap-4 lg:grid-cols-[1fr_320px]">
       {tasks.length === 0 ? (
-        <p className="text-[#555050] font-mono text-sm py-4">No tasks yet.</p>
+        <EmptyState title="No tasks yet" />
       ) : (
-        <div className="border border-[#1A1A1A] divide-y divide-[#1A1A1A]">
+        <Card padding="none" className="divide-y divide-line overflow-hidden">
           {tasks.map((t) => (
-            <div key={t.id} className="flex items-center gap-3 px-4 py-3">
+            <div key={t.id} className="flex items-center gap-3 px-5 py-3">
               <button
+                aria-label={t.status === 'done' ? `Mark "${t.title}" as not done` : `Mark "${t.title}" as done`}
                 onClick={() =>
                   startTransition(() =>
-                    updateTaskStatusAction(
-                      t.id,
-                      projectId,
-                      t.status === 'done' ? 'todo' : 'done'
-                    )
+                    updateTaskStatusAction(t.id, projectId, t.status === 'done' ? 'todo' : 'done')
                   )
                 }
                 className={[
-                  'w-4 h-4 border flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors duration-100',
+                  'flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md border transition-colors duration-150',
                   t.status === 'done'
-                    ? 'border-[#4CAF7D] bg-[#4CAF7D11] text-[#4CAF7D]'
-                    : 'border-[#2A2A2A] hover:border-[#4CAF7D]',
+                    ? 'border-pounamu bg-pounamu/15 text-pounamu'
+                    : 'border-line-strong hover:border-pounamu',
                 ].join(' ')}
               >
-                {t.status === 'done' && <span className="text-[9px]">✓</span>}
+                {t.status === 'done' && <Check size={13} strokeWidth={3} />}
               </button>
-              <div className="flex-1 min-w-0">
-                <p className={['font-mono text-sm', t.status === 'done' ? 'text-[#555050] line-through' : 'text-[#F5F0E8]'].join(' ')}>
+              <div className="min-w-0 flex-1">
+                <p className={['text-sm', t.status === 'done' ? 'text-dim line-through' : 'text-bone'].join(' ')}>
                   {t.title}
                 </p>
-                {t.due_date && (
-                  <p className="text-[#555050] font-mono text-xs mt-0.5">
-                    Due {new Date(t.due_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
-                  </p>
-                )}
+                {t.due_date && <p className="mt-0.5 text-[13px] text-dim">Due {formatDate(t.due_date)}</p>}
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Badge variant={t.status as 'todo' | 'in_progress' | 'done'}>{t.status.replace(/_/g, ' ')}</Badge>
-                {t.visible_to_client && (
-                  <Badge variant="muted">client visible</Badge>
-                )}
-              </div>
+              {t.visible_to_client && <Badge variant="blue">Client visible</Badge>}
             </div>
           ))}
-        </div>
+        </Card>
       )}
 
-      {/* Add task form */}
-      <div className="border border-[#1A1A1A] p-4">
-        <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-3">Add task</p>
-        <form action={taskAction} className="flex flex-col gap-3">
+      <Card>
+        <p className="eyebrow mb-3">Add task</p>
+        <form onSubmit={addTask.onSubmit} className="flex flex-col gap-3">
           <input type="hidden" name="project_id" value={projectId} />
           <Input name="title" placeholder="Task title" required />
-          <div className="grid grid-cols-2 gap-3">
-            <Input name="due_date" type="date" label="Due date" />
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-mono text-[#8A8580] uppercase tracking-wide">Client visible</label>
-              <div className="flex items-center gap-2 h-9 px-3 border border-[#2A2A2A]">
-                <input type="checkbox" name="visible_to_client" id="visible_to_client" className="accent-[#C9963A]" />
-                <label htmlFor="visible_to_client" className="text-[#8A8580] font-mono text-xs cursor-pointer">
-                  Show to client
-                </label>
-              </div>
-            </div>
-          </div>
-          {taskState?.error && (
-            <p className="text-[#E05252] font-mono text-xs">{taskState.error}</p>
-          )}
-          <Button type="submit" size="sm" loading={taskPending} variant="secondary">
+          <Input name="due_date" type="date" label="Due date" />
+          <label className="flex cursor-pointer items-center gap-2 text-[13px] text-muted">
+            <input type="checkbox" name="visible_to_client" className="accent-amber" />
+            Show to client
+          </label>
+          {addTask.error && <FormError>{addTask.error}</FormError>}
+          <Button type="submit" size="sm" loading={addTask.pending} variant="secondary">
             Add task
           </Button>
         </form>
-      </div>
+      </Card>
     </div>
   )
 }
@@ -138,39 +98,33 @@ function TasksTab({ tasks, projectId }: { tasks: Task[]; projectId: string }) {
 // ─── File Row (with download) ─────────────────────────────────────────────────
 
 function FileRow({ file }: { file: ProjectFile }) {
-  const [url, setUrl] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleDownload() {
-    const { createBrowserClient } = await import('@supabase/ssr')
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-    const { data } = await supabase.storage.from('project-files').createSignedUrl(file.storage_path, 60)
-    if (data?.signedUrl) {
-      const a = document.createElement('a')
-      a.href = data.signedUrl
-      a.download = file.name
-      a.click()
-    }
+    setError(null)
+    const { data, error: signError } = await createClient()
+      .storage.from(FILES_BUCKET)
+      .createSignedUrl(file.storage_path, 60, { download: file.name })
+
+    if (signError || !data) setError('Download failed.')
+    else window.location.href = data.signedUrl
   }
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <div className="flex-1 min-w-0">
-        <p className="text-[#F5F0E8] font-mono text-sm truncate">{file.name}</p>
-        <p className="text-[#555050] font-mono text-xs mt-0.5">
-          {new Date(file.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
-        </p>
+    <div className="flex items-center gap-3 px-5 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-bone">{file.name}</p>
+        <p className="mt-0.5 font-mono text-xs text-dim">{formatDate(file.created_at, 'medium')}</p>
       </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex shrink-0 items-center gap-2">
         <Badge variant="muted">{file.type.replace(/_/g, ' ')}</Badge>
         <Badge variant={file.uploaded_by === 'client' ? 'amber' : 'muted'}>{file.uploaded_by}</Badge>
+        {error && <span className="text-xs text-coral">{error}</span>}
         <button
           onClick={handleDownload}
-          className="text-[#555050] hover:text-[#F5F0E8] font-mono text-[10px] transition-colors cursor-pointer"
+          className="cursor-pointer text-[13px] text-dim transition-colors hover:text-bone"
         >
-          ↓ download
+          Download
         </button>
       </div>
     </div>
@@ -187,37 +141,37 @@ type QuestionnaireResponseWithTemplate = {
 }
 
 function QuestionnaireTab({ response }: { response: QuestionnaireResponseWithTemplate | null }) {
-  if (!response) {
-    return (
-      <div className="border border-[#1A1A1A] px-6 py-10 text-center">
-        <p className="text-[#555050] font-mono text-sm">No questionnaire submitted yet.</p>
-      </div>
-    )
-  }
+  if (!response) return <EmptyState title="No questionnaire submitted yet" />
 
   const questions = [...response.template.questions].sort((a, b) => a.order - b.order)
 
   return (
-    <div className="flex flex-col gap-1">
-      {response.submitted_at && (
-        <p className="text-[#4CAF7D] font-mono text-xs mb-4">
-          Submitted {new Date(response.submitted_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })}
-        </p>
-      )}
-      {questions.map((q, i) => {
-        const answer = response.responses[q.id]
-        return (
-          <div key={q.id} className="border-b border-[#1A1A1A] py-4">
-            <p className="text-[#555050] font-mono text-xs mb-1">
-              <span className="mr-2">{String(i + 1).padStart(2, '0')}.</span>{q.question}
-            </p>
-            <p className="text-[#F5F0E8] font-mono text-sm leading-relaxed pl-6">
-              {answer?.trim() ? answer : <span className="text-[#2A2A2A]">No answer</span>}
-            </p>
-          </div>
-        )
-      })}
-    </div>
+    <Card padding="none" className="overflow-hidden">
+      <div className="border-b border-line px-5 py-3">
+        {response.submitted_at && (
+          <p className="text-[13px] text-pounamu">Submitted {formatDate(response.submitted_at, 'long')}</p>
+        )}
+        {!response.completed && (
+          <p className="text-[13px] text-amber">Draft — the client has started this but hasn&apos;t submitted it yet.</p>
+        )}
+      </div>
+      <div className="divide-y divide-line">
+        {questions.map((q, i) => {
+          const answer = response.responses[q.id]
+          return (
+            <div key={q.id} className="px-5 py-4">
+              <p className="mb-1 text-[13px] text-dim">
+                <span className="mr-2 font-mono text-xs">{String(i + 1).padStart(2, '0')}</span>
+                {q.question}
+              </p>
+              <p className="text-sm leading-relaxed text-bone">
+                {answer?.trim() ? answer : <span className="text-dim/70">No answer</span>}
+              </p>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
   )
 }
 
@@ -230,6 +184,7 @@ function FilesTab({ files, projectId, clientId, clientSlug }: {
   clientSlug: string
 }) {
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [fileType, setFileType] = useState<FileType>('document')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -237,24 +192,22 @@ function FilesTab({ files, projectId, clientId, clientSlug }: {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
+    setUploadError(null)
     try {
-      const { createBrowserClient } = await import('@supabase/ssr')
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
-      const path = `${clientSlug}/${projectId}/${fileType}/${file.name}`
-      const { error } = await supabase.storage.from('project-files').upload(path, file, { upsert: true })
-      if (!error) {
-        await createFileRecordAction({
-          projectId,
-          clientId,
-          name: file.name,
-          type: fileType,
-          storagePath: path,
-          uploadedBy: 'internal',
-        })
+      const path = `${clientSlug}/${projectId}/${fileType}/${storageFileName(file.name)}`
+      const { error } = await createClient().storage.from(FILES_BUCKET).upload(path, file)
+      if (error) {
+        setUploadError(error.message)
+        return
       }
+      const saved = await createFileRecordAction({
+        projectId,
+        clientId,
+        name: file.name,
+        type: fileType,
+        storagePath: path,
+      })
+      if (saved.error) setUploadError(saved.error)
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -262,19 +215,19 @@ function FilesTab({ files, projectId, clientId, clientSlug }: {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="grid items-start gap-4 lg:grid-cols-[1fr_320px]">
       {files.length === 0 ? (
-        <p className="text-[#555050] font-mono text-sm py-4">No files yet.</p>
+        <EmptyState title="No files yet" />
       ) : (
-        <div className="border border-[#1A1A1A] divide-y divide-[#1A1A1A]">
+        <Card padding="none" className="divide-y divide-line overflow-hidden">
           {files.map((f) => (
             <FileRow key={f.id} file={f} />
           ))}
-        </div>
+        </Card>
       )}
 
-      <div className="border border-[#1A1A1A] p-4">
-        <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-3">Upload file</p>
+      <Card>
+        <p className="eyebrow mb-3">Upload file</p>
         <div className="flex flex-col gap-3">
           <Select
             label="File type"
@@ -282,18 +235,17 @@ function FilesTab({ files, projectId, clientId, clientSlug }: {
             value={fileType}
             onChange={(e) => setFileType(e.target.value as FileType)}
           />
-          <div>
-            <input
-              ref={fileRef}
-              type="file"
-              onChange={handleUpload}
-              disabled={uploading}
-              className="font-mono text-sm text-[#8A8580] file:bg-[#1A1A1A] file:border file:border-[#2A2A2A] file:text-[#F5F0E8] file:font-mono file:text-xs file:px-3 file:py-1.5 file:mr-3 file:cursor-pointer disabled:opacity-40"
-            />
-          </div>
-          {uploading && <p className="text-[#C9963A] font-mono text-xs">Uploading…</p>}
+          <input
+            ref={fileRef}
+            type="file"
+            onChange={handleUpload}
+            disabled={uploading}
+            className="text-[13px] text-muted file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-bone/[0.08] file:px-3 file:py-1.5 file:text-[13px] file:text-bone disabled:opacity-40"
+          />
+          {uploading && <p className="text-[13px] text-amber">Uploading…</p>}
+          {uploadError && <FormError>{uploadError}</FormError>}
         </div>
-      </div>
+      </Card>
     </div>
   )
 }
@@ -301,72 +253,53 @@ function FilesTab({ files, projectId, clientId, clientSlug }: {
 // ─── Timeline Tab ─────────────────────────────────────────────────────────────
 
 function TimelineTab({ events, projectId }: { events: CalendarEvent[]; projectId: string }) {
-  const [eventState, eventAction, eventPending] = useActionState(createEventAction, null)
-
-  const eventTypeColors: Record<CalendarEventType, string> = {
-    deadline: 'amber',
-    meeting: 'default',
-    milestone: 'green',
-    reminder: 'muted',
-  }
+  const addEvent = useFormSubmit((fd) => {
+    fd.set('start_at', localInputToISO(fd.get('start_at') as string))
+    fd.set('end_at', localInputToISO(fd.get('end_at') as string))
+    return createCalendarEventAction(fd)
+  })
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="grid items-start gap-4 lg:grid-cols-[1fr_320px]">
       {events.length === 0 ? (
-        <p className="text-[#555050] font-mono text-sm py-4">No events yet.</p>
+        <EmptyState title="No events yet" />
       ) : (
-        <div className="flex flex-col gap-2">
-          {events
-            .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
-            .map((ev) => (
-              <div key={ev.id} className="flex gap-4 border-l-2 border-[#1A1A1A] pl-4 py-1">
-                <div>
-                  <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest">
-                    {new Date(ev.start_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
-                  </p>
+        <Card padding="none" className="divide-y divide-line overflow-hidden">
+          {events.map((ev) => (
+            <div key={ev.id} className="flex gap-4 px-5 py-3">
+              <p className="w-14 shrink-0 pt-0.5 font-mono text-xs text-amber">{formatDate(ev.start_at)}</p>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-bone">{ev.title}</p>
+                  <Badge variant={ev.type as CalendarEventType}>{ev.type}</Badge>
+                  {ev.visible_to_client && <Badge variant="blue">Client visible</Badge>}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[#F5F0E8] font-mono text-sm">{ev.title}</p>
-                    <Badge variant={eventTypeColors[ev.type] as 'amber' | 'green' | 'muted' | 'default'}>
-                      {ev.type}
-                    </Badge>
-                    {ev.visible_to_client && <Badge variant="muted">client visible</Badge>}
-                  </div>
-                  {ev.description && (
-                    <p className="text-[#8A8580] font-mono text-xs mt-0.5">{ev.description}</p>
-                  )}
-                </div>
+                {ev.description && <p className="mt-0.5 text-[13px] text-dim">{ev.description}</p>}
               </div>
-            ))}
-        </div>
+            </div>
+          ))}
+        </Card>
       )}
 
-      <div className="border border-[#1A1A1A] p-4">
-        <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-3">Add event</p>
-        <form action={eventAction} className="flex flex-col gap-3">
+      <Card>
+        <p className="eyebrow mb-3">Add event</p>
+        <form onSubmit={addEvent.onSubmit} className="flex flex-col gap-3">
           <input type="hidden" name="project_id" value={projectId} />
           <Input name="title" label="Title" required />
           <Select name="type" label="Type" defaultValue="milestone" options={EVENT_TYPE_OPTIONS} />
-          <div className="grid grid-cols-2 gap-3">
-            <Input name="start_at" type="datetime-local" label="Start" required />
-            <Input name="end_at" type="datetime-local" label="End" required />
-          </div>
+          <Input name="start_at" type="datetime-local" label="Start" required />
+          <Input name="end_at" type="datetime-local" label="End" required />
           <Textarea name="description" label="Description" />
-          <div className="flex items-center gap-2">
-            <input type="checkbox" name="visible_to_client" id="event_visible" className="accent-[#C9963A]" />
-            <label htmlFor="event_visible" className="text-[#8A8580] font-mono text-xs cursor-pointer">
-              Visible to client
-            </label>
-          </div>
-          {eventState?.error && (
-            <p className="text-[#E05252] font-mono text-xs">{eventState.error}</p>
-          )}
-          <Button type="submit" size="sm" loading={eventPending} variant="secondary">
+          <label className="flex cursor-pointer items-center gap-2 text-[13px] text-muted">
+            <input type="checkbox" name="visible_to_client" className="accent-amber" />
+            Visible to client
+          </label>
+          {addEvent.error && <FormError>{addEvent.error}</FormError>}
+          <Button type="submit" size="sm" loading={addEvent.pending} variant="secondary">
             Add event
           </Button>
         </form>
-      </div>
+      </Card>
     </div>
   )
 }
@@ -388,22 +321,21 @@ function NotesTab({ notes, projectId }: { notes: string | null; projectId: strin
   }
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
-        <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest">Internal notes</p>
-        <Badge variant="red">Internal only — never shown to client</Badge>
-        {saving && <span className="text-[#555050] font-mono text-[10px]">Saving…</span>}
-        {saved && <span className="text-[#4CAF7D] font-mono text-[10px]">Saved</span>}
+    <Card>
+      <div className="mb-3 flex items-center gap-2">
+        <p className="eyebrow">Internal notes</p>
+        <Badge variant="red" className="normal-case">Never shown to the client</Badge>
+        {saving && <span className="text-xs text-dim">Saving…</span>}
+        {saved && <span className="text-xs text-pounamu">Saved</span>}
       </div>
-      <textarea
+      <Textarea
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={handleBlur}
         placeholder="Internal notes about this project…"
         rows={12}
-        className="w-full bg-[#111111] text-[#F5F0E8] border border-[#2A2A2A] hover:border-[#3A3A3A] focus:border-[#C9963A] font-mono text-sm px-3 py-2 outline-none resize-y placeholder:text-[#555050] transition-colors duration-150"
       />
-    </div>
+    </Card>
   )
 }
 
@@ -435,71 +367,67 @@ export function ProjectDetailClient({
     { key: 'notes', label: 'Notes' },
   ]
 
+  const facts = [
+    { label: 'Tier', value: project.tier?.replace('tier', 'Tier ') ?? '—' },
+    { label: 'Value', value: project.value != null ? formatDollars(project.value) : '—' },
+    { label: 'Start', value: project.start_date ? formatDate(project.start_date) : '—' },
+    { label: 'Due', value: project.estimated_completion ? formatDate(project.estimated_completion, 'medium') : '—' },
+  ]
+
   return (
     <>
-      {/* Next action banner */}
-      <div className="border border-[#C9963A33] bg-[#C9963A0A] px-4 py-3 mb-5 flex items-start gap-3">
-        <span className="text-[#C9963A] font-mono text-sm flex-shrink-0">→</span>
-        <div>
-          <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-0.5">Next action</p>
-          <p className="text-[#C9963A] font-mono text-sm">{NEXT_ACTIONS[project.status]}</p>
-        </div>
-        <div className="ml-auto flex-shrink-0">
+      {/* Where it is on the river, and what happens next */}
+      <Card padding="none" className="mb-4 overflow-hidden">
+        <div className="flex flex-wrap items-center gap-4 px-5 pt-4">
+          <div className="min-w-0 flex-1">
+            <p className="eyebrow mb-1">Next action</p>
+            <p className="font-display text-xl text-bone">{NEXT_ACTIONS[project.status]}</p>
+          </div>
           <select
+            aria-label="Project status"
             value={project.status}
             onChange={(e) =>
               startTransition(() => updateStatusAction(project.id, e.target.value as ProjectStatus))
             }
-            className="bg-[#111111] text-[#F5F0E8] border border-[#2A2A2A] hover:border-[#3A3A3A] font-mono text-xs px-2 py-1 outline-none cursor-pointer"
+            className="h-9 cursor-pointer rounded-lg border border-line-strong bg-ink px-2.5 text-[13px] text-bone outline-none transition-colors hover:border-dim"
           >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value} className="bg-[#111111]">
+            {PROJECT_STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value} className="bg-surface">
                 {opt.label}
               </option>
             ))}
           </select>
         </div>
-      </div>
-
-      {/* Project meta row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 border border-[#1A1A1A] divide-x divide-[#1A1A1A] mb-5">
-        {[
-          { label: 'Tier', value: project.tier ?? '—' },
-          { label: 'Value', value: project.value != null ? formatNZD(project.value) : '—' },
-          { label: 'Start', value: project.start_date ? new Date(project.start_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : '—' },
-          { label: 'Due', value: project.estimated_completion ? new Date(project.estimated_completion).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : '—' },
-        ].map(({ label, value }) => (
-          <div key={label} className="px-4 py-3">
-            <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-1">{label}</p>
-            <p className="text-[#F5F0E8] font-mono text-sm">{value}</p>
-          </div>
-        ))}
-      </div>
+        <div className="px-5 pt-2 pb-4">
+          <RiverJourney status={project.status} height="h-[110px]" marker={STAGE_LABELS[project.status]} />
+        </div>
+        <div className="grid grid-cols-2 border-t border-line md:grid-cols-4">
+          {facts.map(({ label, value }) => (
+            <div key={label} className="px-5 py-3">
+              <p className="eyebrow mb-1">{label}</p>
+              <p className="font-mono text-sm text-bone">{value}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       {/* Tabs */}
-      <div className="flex border-b border-[#1A1A1A] mb-5">
+      <div className="mb-4 flex gap-1 overflow-x-auto border-b border-line">
         {TABS.map(({ key, label, count }) => (
           <button
             key={key}
             onClick={() => setTab(key)}
             className={[
-              'px-4 py-2.5 font-mono text-xs uppercase tracking-wide border-b-2 transition-colors duration-100 cursor-pointer flex items-center gap-1.5',
-              tab === key
-                ? 'border-[#F5F0E8] text-[#F5F0E8]'
-                : 'border-transparent text-[#555050] hover:text-[#8A8580]',
+              '-mb-px flex cursor-pointer items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm whitespace-nowrap transition-colors duration-150',
+              tab === key ? 'border-amber font-medium text-bone' : 'border-transparent text-dim hover:text-muted',
             ].join(' ')}
           >
             {label}
-            {count !== undefined && (
-              <span className={['text-[9px] font-mono', tab === key ? 'text-[#555050]' : 'text-[#2A2A2A]'].join(' ')}>
-                {count}
-              </span>
-            )}
+            {count !== undefined && <span className="font-mono text-xs text-dim">{count}</span>}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
       {tab === 'tasks' && <TasksTab tasks={tasks} projectId={project.id} />}
       {tab === 'files' && (
         <FilesTab

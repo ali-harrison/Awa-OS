@@ -1,9 +1,10 @@
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { HTMLAttributes } from 'react'
 
 interface HeaderProps extends HTMLAttributes<HTMLDivElement> {
   title: string
-  subtitle?: string
+  subtitle?: React.ReactNode
   actions?: React.ReactNode
   backHref?: string
   backLabel?: string
@@ -12,30 +13,21 @@ interface HeaderProps extends HTMLAttributes<HTMLDivElement> {
 export function Header({ title, subtitle, actions, backHref, backLabel, className = '', ...props }: HeaderProps) {
   return (
     <div
-      className={[
-        'flex items-center justify-between',
-        'px-6 py-4',
-        'border-b border-[#1A1A1A]',
-        'bg-[#0A0A0A]',
-        className,
-      ].join(' ')}
+      className={['flex flex-wrap items-end justify-between gap-3 px-5 pt-6 pb-4 md:px-8 md:pt-8', className].join(' ')}
       {...props}
     >
-      <div>
+      <div className="min-w-0">
         {backHref && (
           <Link
             href={backHref}
-            className="text-[#555050] font-mono text-[10px] uppercase tracking-widest hover:text-[#F5F0E8] transition-colors duration-150 mb-1 inline-block"
+            className="mb-2 inline-flex items-center gap-1.5 text-[13px] text-dim transition-colors duration-150 hover:text-bone"
           >
-            ← {backLabel ?? 'Back'}
+            <ArrowLeft size={14} />
+            {backLabel ?? 'Back'}
           </Link>
         )}
-        <h1 className="text-[#F5F0E8] font-mono font-semibold text-base tracking-tight">
-          {title}
-        </h1>
-        {subtitle && (
-          <p className="text-[#555050] font-mono text-xs mt-0.5">{subtitle}</p>
-        )}
+        <h1 className="truncate font-display text-[32px] leading-tight text-bone">{title}</h1>
+        {subtitle && <p className="mt-0.5 text-sm text-dim">{subtitle}</p>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </div>

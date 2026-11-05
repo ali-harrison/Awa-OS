@@ -3,9 +3,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { PageWrapper } from '@/components/layout/PageWrapper'
-import { Badge } from '@/components/ui/Badge'
 import { ProjectDetailClient } from './ProjectDetailClient'
-import type { Client, Project, Task, ProjectFile, CalendarEvent, QuestionnaireResponse } from '@/types'
+import { CLIENT_COLUMNS, type Client, type Project, type Task, type ProjectFile, type CalendarEvent, type QuestionnaireResponse } from '@/types'
 
 export default async function ProjectDetailPage({
   params,
@@ -22,11 +21,11 @@ export default async function ProjectDetailPage({
     { data: events },
     { data: questionnaireResponse },
   ] = await Promise.all([
-    supabase.from('projects').select('*, client:clients(*)').eq('id', id).single(),
+    supabase.from('projects').select(`*, client:clients(${CLIENT_COLUMNS})`).eq('id', id).single(),
     supabase.from('tasks').select('*').eq('project_id', id).order('created_at'),
     supabase.from('files').select('*').eq('project_id', id).order('created_at', { ascending: false }),
     supabase.from('calendar_events').select('*').eq('project_id', id).order('start_at'),
-    supabase.from('questionnaire_responses').select('*, template:questionnaire_templates(questions)').eq('project_id', id).maybeSingle(),
+    supabase.from('questionnaire_responses').select('*, template:questionnaire_templates(questions)').eq('project_id', id).order('submitted_at', { ascending: false, nullsFirst: false }).limit(1).maybeSingle(),
   ])
 
   if (!project) notFound()
@@ -38,13 +37,12 @@ export default async function ProjectDetailPage({
       <Header
         title={project.name}
         subtitle={
-          <Link href={`/clients/${client.id}`} className="hover:text-[#F5F0E8] transition-colors duration-150">
+          <Link href={`/clients/${client.id}`} className="transition-colors duration-150 hover:text-bone">
             {client.name}{client.company ? ` — ${client.company}` : ''}
-          </Link> as unknown as string
+          </Link>
         }
         backHref="/projects"
         backLabel="Projects"
-        actions={<Badge variant={project.status}>{project.status.replace(/_/g, ' ')}</Badge>}
       />
       <PageWrapper>
         <ProjectDetailClient
