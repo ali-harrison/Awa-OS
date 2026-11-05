@@ -1,16 +1,15 @@
 'use server'
 
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
-import { PORTAL_COOKIE, PORTAL_COOKIE_MAX_AGE } from '@/lib/portal/auth'
+import { setPortalSession } from '@/lib/portal/auth'
 import { verifyPassword } from '@/lib/portal/password'
 
 export async function portalLoginAction(
   _prev: { error: string } | null,
   formData: FormData
 ): Promise<{ error: string }> {
-  const email = formData.get('email') as string
+  const email = (formData.get('email') as string)?.trim().toLowerCase()
   const password = formData.get('password') as string
   const slug = formData.get('slug') as string
 
@@ -18,35 +17,31 @@ export async function portalLoginAction(
     return { error: 'Email and password are required.' }
   }
 
-  const supabase = await createServiceClient()
-  const { data: client } = await supabase
+  const { data } = await createServiceClient()
     .from('clients')
-    .select('id, slug, portal_access, portal_password_hash')
-    .eq('email', email.toLowerCase().trim())
-    .single()
+    .select('id, slug, email, portal_access, portal_password_hash')
+    .ilike('email', email)
 
-  if (!client || !client.portal_access) {
+  // ilike treats _ and % as wildcards, so confirm the match. Emails aren't unique —
+  // one person can run two client accounts — so try the one they came from first.
+  const accounts = (data ?? [])
+    .filter((c) => c.email.toLowerCase() === email && c.portal_access)
+    .sort((a, b) => Number(b.slug === slug) - Number(a.slug === slug))
+
+  if (accounts.length === 0) {
     return { error: 'Invalid email or password.' }
   }
 
-  if (!client.portal_password_hash) {
+  if (accounts.every((c) => !c.portal_password_hash)) {
     return { error: 'Your account isn\'t set up yet. Please use the setup link from your welcome email.' }
   }
 
-  const valid = await verifyPassword(password, client.portal_password_hash)
-  if (!valid) {
-    return { error: 'Invalid email or password.' }
+  for (const account of accounts) {
+    if (account.portal_password_hash && (await verifyPassword(password, account.portal_password_hash))) {
+      await setPortalSession({ clientId: account.id, clientSlug: account.slug })
+      redirect(`/portal/${account.slug}`)
+    }
   }
 
-  const session = JSON.stringify({ clientId: client.id, clientSlug: client.slug })
-  const cookieStore = await cookies()
-  cookieStore.set(PORTAL_COOKIE, session, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: PORTAL_COOKIE_MAX_AGE,
-    path: '/portal',
-  })
-
-  redirect(`/portal/${client.slug}`)
+  return { error: 'Invalid email or password.' }
 }

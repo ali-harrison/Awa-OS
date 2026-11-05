@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
+import { daysSince, formatDollars } from '@/lib/format'
 import { NEXT_ACTIONS, type ProjectStatus } from '@/types'
 import type { Client, Project } from '@/types'
 
@@ -17,14 +18,6 @@ const PIPELINE_COLUMNS: { status: ProjectStatus; label: string }[] = [
   { status: 'review', label: 'Review' },
   { status: 'complete', label: 'Complete' },
 ]
-
-function formatNZD(value: number) {
-  return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', minimumFractionDigits: 0 }).format(value)
-}
-
-function daysSince(dateStr: string) {
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000)
-}
 
 type ProjectWithClient = Project & { client: Pick<Client, 'id' | 'name' | 'company'> }
 
@@ -71,7 +64,7 @@ export default async function PipelinePage() {
                   <div className="flex items-center gap-2">
                     {colValue > 0 && (
                       <span className="text-[#555050] font-mono text-[9px]">
-                        {formatNZD(colValue)}
+                        {formatDollars(colValue)}
                       </span>
                     )}
                     <span className="text-[#2A2A2A] font-mono text-[9px] border border-[#2A2A2A] px-1">
@@ -109,7 +102,7 @@ export default async function PipelinePage() {
                         <div className="flex items-center justify-between">
                           {p.value != null ? (
                             <span className="text-[#8A8580] font-mono text-[10px]">
-                              {formatNZD(p.value)}
+                              {formatDollars(p.value)}
                             </span>
                           ) : (
                             <span />

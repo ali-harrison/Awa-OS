@@ -1,14 +1,15 @@
 'use client'
 
-import { useState, useActionState } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/Input'
 import { SlideOver } from '@/components/ui/SlideOver'
-import { createProjectAction } from './actions'
-import { NEXT_ACTIONS } from '@/types'
-import type { Client, Project, ProjectStatus, ProjectTier } from '@/types'
+import { createProjectAction, type CreateProjectResult } from './actions'
+import { daysSince, formatDate, formatDollars } from '@/lib/format'
+import { NEXT_ACTIONS, PROJECT_STAGES, PROJECT_STATUS_OPTIONS } from '@/types'
+import type { Client, Project, ProjectTier } from '@/types'
 
 const TIER_OPTIONS: { value: ProjectTier; label: string }[] = [
   { value: 'tier1', label: 'Tier 1' },
@@ -16,48 +17,26 @@ const TIER_OPTIONS: { value: ProjectTier; label: string }[] = [
   { value: 'tier3', label: 'Tier 3' },
 ]
 
-const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
-  { value: 'onboarding', label: 'Onboarding' },
-  { value: 'questionnaire_sent', label: 'Questionnaire Sent' },
-  { value: 'questionnaire_received', label: 'Questionnaire Received' },
-  { value: 'proposal_sent', label: 'Proposal Sent' },
-  { value: 'contract_sent', label: 'Contract Sent' },
-  { value: 'deposit_pending', label: 'Deposit Pending' },
-  { value: 'deposit_paid', label: 'Deposit Paid' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'review', label: 'Review' },
-  { value: 'complete', label: 'Complete' },
-]
-
-const PIPELINE_COLUMNS: ProjectStatus[] = [
-  'onboarding', 'questionnaire_sent', 'questionnaire_received',
-  'proposal_sent', 'contract_sent', 'deposit_pending',
-  'deposit_paid', 'in_progress', 'review', 'complete',
-]
-
-function formatNZD(value: number) {
-  return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', minimumFractionDigits: 0 }).format(value)
-}
-
-function daysSince(dateStr: string) {
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000)
-}
-
-function NewProjectForm({ clients, defaultClientId, onSuccess }: {
+function NewProjectForm({ clients, defaultClientId, onClose }: {
   clients: Client[]
   defaultClientId?: string
-  onSuccess: () => void
+  onClose: () => void
 }) {
-  const [, , pending] = useActionState(createProjectAction, null)
+  const [result, setResult] = useState<CreateProjectResult>(null)
+  const [pending, startTransition] = useTransition()
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    startTransition(async () => {
+      const outcome = await createProjectAction(formData)
+      setResult(outcome)
+      if (!outcome) onClose()
+    })
+  }
 
   return (
-    <form
-      action={async (fd) => {
-        const result = await createProjectAction(null, fd)
-        if (!result) onSuccess()
-      }}
-      className="flex flex-col gap-4"
-    >
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <Select
         label="Client"
         name="client_id"
@@ -82,14 +61,25 @@ function NewProjectForm({ clients, defaultClientId, onSuccess }: {
         label="Initial status"
         name="status"
         defaultValue="onboarding"
-        options={STATUS_OPTIONS}
+        options={PROJECT_STATUS_OPTIONS}
       />
       <p className="text-[#555050] font-mono text-xs border border-[#1A1A1A] px-3 py-2">
         If status is set to <span className="text-[#C9963A]">onboarding</span>, welcome &amp; questionnaire emails will be sent automatically.
       </p>
-      <Button type="submit" loading={pending} className="mt-2">
-        Create project
-      </Button>
+      {result?.error && (
+        <p className="text-[#E05252] font-mono text-xs border border-[#E0525233] bg-[#E0525211] px-3 py-2">
+          {result.error}
+        </p>
+      )}
+      {result?.created ? (
+        <Button type="button" variant="secondary" className="mt-2" onClick={onClose}>
+          Close
+        </Button>
+      ) : (
+        <Button type="submit" loading={pending} className="mt-2">
+          Create project
+        </Button>
+      )}
     </form>
   )
 }
@@ -105,7 +95,8 @@ export function ProjectsClient({
   clients: Client[]
   defaultClientId?: string
 }) {
-  const [open, setOpen] = useState(false)
+  // Arriving from a client's "+ New project" link
+  const [open, setOpen] = useState(Boolean(defaultClientId))
   const [view, setView] = useState<ViewMode>('table')
 
   return (
@@ -143,7 +134,7 @@ export function ProjectsClient({
         <NewProjectForm
           clients={clients}
           defaultClientId={defaultClientId}
-          onSuccess={() => setOpen(false)}
+          onClose={() => setOpen(false)}
         />
       </SlideOver>
     </>
@@ -185,14 +176,12 @@ function TableView({ projects }: { projects: (Project & { client: Pick<Client, '
               {isStale && <Badge variant="amber">{days}d</Badge>}
             </div>
             <Badge variant="muted">{p.tier ?? '—'}</Badge>
-            <span className="text-[#F5F0E8] font-mono text-sm">{p.value != null ? formatNZD(p.value) : '—'}</span>
+            <span className="text-[#F5F0E8] font-mono text-sm">{p.value != null ? formatDollars(p.value) : '—'}</span>
             <span className="text-[#8A8580] font-mono text-xs">
-              {p.estimated_completion
-                ? new Date(p.estimated_completion).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })
-                : '—'}
+              {p.estimated_completion ? formatDate(p.estimated_completion) : '—'}
             </span>
-            <span className="text-[#555050] font-mono text-[10px] truncate">
-              {NEXT_ACTIONS[p.status].split(' ')[0]}…
+            <span className="text-[#555050] font-mono text-[10px] truncate" title={NEXT_ACTIONS[p.status]}>
+              {NEXT_ACTIONS[p.status]}
             </span>
           </Link>
         )
@@ -203,13 +192,13 @@ function TableView({ projects }: { projects: (Project & { client: Pick<Client, '
 
 function PipelineView({ projects }: { projects: (Project & { client: Pick<Client, 'id' | 'name' | 'company'> })[] }) {
   const byStatus = Object.fromEntries(
-    PIPELINE_COLUMNS.map((s) => [s, projects.filter((p) => p.status === s)])
+    PROJECT_STAGES.map((s) => [s, projects.filter((p) => p.status === s)])
   )
 
   return (
     <div className="overflow-x-auto">
       <div className="flex gap-3 min-w-max pb-4">
-        {PIPELINE_COLUMNS.map((status) => {
+        {PROJECT_STAGES.map((status) => {
           const col = byStatus[status]
           return (
             <div key={status} className="w-52 flex-shrink-0">
@@ -229,7 +218,7 @@ function PipelineView({ projects }: { projects: (Project & { client: Pick<Client
                     <p className="text-[#F5F0E8] font-mono text-xs truncate mb-0.5">{p.name}</p>
                     <p className="text-[#555050] font-mono text-[10px]">{p.client.name}</p>
                     {p.value != null && (
-                      <p className="text-[#8A8580] font-mono text-[10px] mt-1">{formatNZD(p.value)}</p>
+                      <p className="text-[#8A8580] font-mono text-[10px] mt-1">{formatDollars(p.value)}</p>
                     )}
                   </Link>
                 ))}

@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/Input'
 import { SlideOver } from '@/components/ui/SlideOver'
 import { sendEmailAction } from './actions'
+import { formatDate, formatNZD } from '@/lib/format'
+import { formatDueDate } from '@/lib/invoices'
 import type { Client, Project, EmailLog, Invoice } from '@/types'
 import type { TemplateKey } from '@/lib/resend/templates'
 
@@ -75,7 +77,8 @@ function SendSlideOver({
 }) {
   const [selectedClientId, setSelectedClientId] = useState('')
   const [selectedProjectId, setSelectedProjectId] = useState('')
-  const [vars, setVars] = useState<Record<string, string>>(template.previewVars)
+  // Starts empty: previewVars are sample data, shown as placeholders, and must never be sent
+  const [vars, setVars] = useState<Record<string, string>>({})
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -87,25 +90,23 @@ function SendSlideOver({
     setSelectedClientId(id)
     setSelectedProjectId('')
     const c = clients.find((c) => c.id === id)
-    if (!c) return
+    if (!c) {
+      setVars({})
+      return
+    }
 
     const inv = latestInvoiceByClient[id]
     const autoFill: Record<string, string> = { clientName: c.name }
 
     if (inv) {
-      const amount = new Intl.NumberFormat('en-NZ', {
-        style: 'currency', currency: 'NZD', minimumFractionDigits: 2,
-      }).format(inv.amount / 100)
-      const dueDate = inv.due_date
-        ? new Date(inv.due_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })
-        : 'on receipt'
       autoFill.invoiceNumber = inv.invoice_number
-      autoFill.amount = amount
-      autoFill.dueDate = dueDate
+      autoFill.amount = formatNZD(inv.amount)
+      autoFill.dueDate = formatDueDate(inv.due_date)
       autoFill.paymentLink = inv.stripe_payment_link ?? ''
     }
 
-    setVars((prev) => ({ ...prev, ...autoFill }))
+    // Replace rather than merge, so one client's invoice can't carry over to the next
+    setVars(autoFill)
   }
 
   function handleProjectChange(id: string) {
@@ -119,13 +120,18 @@ function SendSlideOver({
       setError('Please select a client.')
       return
     }
+    // paymentLink can be blank: not every invoice has one
+    const missing = template.vars.filter((v) => v !== 'paymentLink' && !vars[v]?.trim())
+    if (missing.length > 0) {
+      setError(`Please fill in: ${missing.join(', ')}`)
+      return
+    }
     setSending(true)
     setError(null)
     const result = await sendEmailAction({
       templateKey: template.key,
       clientId: selectedClientId,
       projectId: selectedProjectId || null,
-      to: selectedClient.email,
       vars,
     })
     setSending(false)
@@ -175,6 +181,7 @@ function SendSlideOver({
               key={v}
               label={v}
               value={vars[v] ?? ''}
+              placeholder={template.previewVars[v]}
               onChange={(e) => setVars((prev) => ({ ...prev, [v]: e.target.value }))}
             />
           ))}
@@ -302,7 +309,7 @@ export function EmailsClient({
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <Badge variant={log.status === 'sent' ? 'green' : 'red'}>{log.status}</Badge>
                     <span className="text-[#555050] font-mono text-xs">
-                      {new Date(log.sent_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+                      {formatDate(log.sent_at)}
                     </span>
                   </div>
                 </div>

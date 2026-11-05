@@ -2,13 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { EmailsClient } from './EmailsClient'
-import type { Client, Project, EmailLog, Invoice } from '@/types'
+import { CLIENT_COLUMNS, type Client, type Project, type EmailLog, type Invoice } from '@/types'
 
 export default async function EmailsPage() {
   const supabase = await createClient()
 
   const [{ data: clients }, { data: projects }, { data: emailLog }, { data: invoices }] = await Promise.all([
-    supabase.from('clients').select('*').order('name'),
+    supabase.from('clients').select(CLIENT_COLUMNS).order('name'),
     supabase.from('projects').select('id, name, client_id').order('name'),
     supabase
       .from('email_log')

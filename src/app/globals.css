@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-base: #0A0A0A;
+  /* Not --color-base: that would make `text-base` a colour, turning any text using it near-black */
+  --color-background: #0A0A0A;
   --color-surface-1: #111111;
   --color-surface-2: #1A1A1A;
   --color-surface-3: #2A2A2A;

@@ -1,7 +1,6 @@
-import { cookies } from 'next/headers'
-import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
-import { PORTAL_COOKIE } from '@/lib/portal/auth'
+import { getLatestProject, requirePortalClient } from '@/lib/portal/auth'
+import { formatDate, nzDate } from '@/lib/format'
 import { Calendar } from 'lucide-react'
 import type { CalendarEventType } from '@/types'
 
@@ -24,26 +23,12 @@ export default async function PortalTimelinePage({
 }: {
   params: Promise<{ clientSlug: string }>
 }) {
-  await params
-  const cookieStore = await cookies()
-  const raw = cookieStore.get(PORTAL_COOKIE)?.value
-  if (!raw) notFound()
-
-  let session: { clientId: string }
-  try { session = JSON.parse(raw) } catch { notFound() }
-
-  const supabase = await createServiceClient()
-
-  const { data: project } = await supabase
-    .from('projects')
-    .select('id')
-    .eq('client_id', session.clientId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
+  const { clientSlug } = await params
+  const client = await requirePortalClient(clientSlug)
+  const project = await getLatestProject(client.id)
 
   const { data: events } = project
-    ? await supabase
+    ? await createServiceClient()
         .from('calendar_events')
         .select('*')
         .eq('project_id', project.id)
@@ -85,10 +70,10 @@ export default async function PortalTimelinePage({
                       <div className="flex gap-4 px-5 py-4 flex-1 min-w-0">
                         <div style={{ width: 80, flexShrink: 0 }}>
                           <p className="font-mono text-sm" style={{ color: '#f0ece3' }}>
-                            {new Date(ev.start_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+                            {formatDate(ev.start_at)}
                           </p>
                           <p className="font-mono" style={{ fontSize: 10, color: '#555555' }}>
-                            {new Date(ev.start_at).getFullYear()}
+                            {nzDate(ev.start_at).slice(0, 4)}
                           </p>
                         </div>
                         <div className="flex-1 min-w-0">
@@ -127,7 +112,7 @@ export default async function PortalTimelinePage({
                     <div className="flex gap-4 px-5 py-4 flex-1 min-w-0">
                       <div style={{ width: 80, flexShrink: 0 }}>
                         <p className="font-mono text-sm" style={{ color: '#555555' }}>
-                          {new Date(ev.start_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+                          {formatDate(ev.start_at)}
                         </p>
                       </div>
                       <div className="flex-1 min-w-0">

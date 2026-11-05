@@ -1,7 +1,8 @@
-import { cookies } from 'next/headers'
-import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
-import { PORTAL_COOKIE } from '@/lib/portal/auth'
+import { requirePortalClient } from '@/lib/portal/auth'
+import { formatDate, formatNZD } from '@/lib/format'
+import { displayStatus } from '@/lib/invoices'
+import type { Invoice } from '@/types'
 
 const card = {
   background: '#0f0f0f',
@@ -9,10 +10,6 @@ const card = {
   borderRadius: 6,
   boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
 } as const
-
-function formatNZD(cents: number) {
-  return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', minimumFractionDigits: 2 }).format(cents / 100)
-}
 
 const STATUS_STYLE: Record<string, { color: string; bg: string; border: string }> = {
   sent:    { color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',  border: 'rgba(245,158,11,0.2)' },
@@ -27,21 +24,16 @@ export default async function PortalInvoicesPage({
   params: Promise<{ clientSlug: string }>
 }) {
   const { clientSlug } = await params
-  const cookieStore = await cookies()
-  const raw = cookieStore.get(PORTAL_COOKIE)?.value
-  if (!raw) notFound()
+  const client = await requirePortalClient(clientSlug)
 
-  let session: { clientId: string }
-  try { session = JSON.parse(raw) } catch { notFound() }
-
-  const supabase = await createServiceClient()
-
-  const { data: invoices } = await supabase
+  const { data } = await createServiceClient()
     .from('invoices')
     .select('*')
-    .eq('client_id', session.clientId)
+    .eq('client_id', client.id)
     .neq('status', 'draft')
     .order('created_at', { ascending: false })
+
+  const invoices = (data ?? []) as Invoice[]
 
   return (
     <div className="flex flex-col gap-6">
@@ -50,14 +42,15 @@ export default async function PortalInvoicesPage({
         <p className="font-mono text-sm" style={{ color: '#555555' }}>Your invoices from Te Wairama Digital</p>
       </div>
 
-      {(invoices?.length ?? 0) === 0 ? (
+      {invoices.length === 0 ? (
         <div style={{ ...card, padding: '40px 24px', textAlign: 'center' }}>
           <p className="font-mono text-sm" style={{ color: '#555555' }}>No invoices yet.</p>
         </div>
       ) : (
         <div style={{ ...card, overflow: 'hidden' }}>
-          {invoices?.map((inv, i) => {
-            const st = STATUS_STYLE[inv.status] ?? STATUS_STYLE.draft
+          {invoices.map((inv, i) => {
+            const status = displayStatus(inv)
+            const st = STATUS_STYLE[status] ?? STATUS_STYLE.draft
             return (
               <div
                 key={inv.id}
@@ -68,12 +61,12 @@ export default async function PortalInvoicesPage({
                   <p className="font-mono text-sm font-medium mb-0.5" style={{ color: '#f0ece3' }}>{inv.invoice_number}</p>
                   {inv.due_date && (
                     <p className="font-mono text-xs" style={{ color: '#555555' }}>
-                      Due {new Date(inv.due_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      Due {formatDate(inv.due_date, 'long')}
                     </p>
                   )}
                   {inv.status === 'paid' && inv.paid_at && (
                     <p className="font-mono text-xs" style={{ color: '#10b981' }}>
-                      Paid {new Date(inv.paid_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      Paid {formatDate(inv.paid_at, 'medium')}
                     </p>
                   )}
                 </div>
@@ -83,7 +76,7 @@ export default async function PortalInvoicesPage({
                     className="font-mono uppercase"
                     style={{ fontSize: 10, letterSpacing: '0.08em', padding: '2px 8px', borderRadius: 3, color: st.color, background: st.bg, border: `1px solid ${st.border}` }}
                   >
-                    {inv.status}
+                    {status}
                   </span>
                   <a
                     href={`/portal/${clientSlug}/invoices/${inv.id}/pdf`}
@@ -92,7 +85,7 @@ export default async function PortalInvoicesPage({
                   >
                     PDF
                   </a>
-                  {(inv.status === 'sent' || inv.status === 'overdue') && (
+                  {(status === 'sent' || status === 'overdue') && (
                     inv.stripe_payment_link ? (
                       <a
                         href={inv.stripe_payment_link}

@@ -108,20 +108,3 @@ export function Badge({ variant = 'default', className = '', children, ...props 
     </span>
   )
 }
-
-/** Dot indicator — small coloured circle */
-export function StatusDot({ variant = 'default' }: { variant?: BadgeVariant }) {
-  const dotColors: Partial<Record<BadgeVariant, string>> = {
-    green: 'bg-[#4CAF7D]',
-    amber: 'bg-[#C9963A]',
-    red: 'bg-[#E05252]',
-    muted: 'bg-[#555050]',
-    in_progress: 'bg-[#4CAF7D]',
-    active: 'bg-[#4CAF7D]',
-    paid: 'bg-[#4CAF7D]',
-    overdue: 'bg-[#E05252]',
-    deposit_pending: 'bg-[#E05252]',
-  }
-  const color = dotColors[variant] ?? 'bg-[#555050]'
-  return <span className={`inline-block w-1.5 h-1.5 ${color} flex-shrink-0`} />
-}

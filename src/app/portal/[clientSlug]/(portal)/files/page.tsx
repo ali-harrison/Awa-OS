@@ -1,7 +1,7 @@
-import { cookies } from 'next/headers'
-import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
-import { PORTAL_COOKIE } from '@/lib/portal/auth'
+import { getLatestProject, requirePortalClient } from '@/lib/portal/auth'
+import { formatDate } from '@/lib/format'
+import { FILES_BUCKET } from '@/lib/storage'
 import { PortalFileUpload } from './PortalFileUpload'
 
 const card = {
@@ -17,22 +17,9 @@ export default async function PortalFilesPage({
   params: Promise<{ clientSlug: string }>
 }) {
   const { clientSlug } = await params
-  const cookieStore = await cookies()
-  const raw = cookieStore.get(PORTAL_COOKIE)?.value
-  if (!raw) notFound()
-
-  let session: { clientId: string }
-  try { session = JSON.parse(raw) } catch { notFound() }
-
-  const supabase = await createServiceClient()
-
-  const { data: project } = await supabase
-    .from('projects')
-    .select('id')
-    .eq('client_id', session.clientId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
+  const client = await requirePortalClient(clientSlug)
+  const project = await getLatestProject(client.id)
+  const supabase = createServiceClient()
 
   const { data: files } = project
     ? await supabase
@@ -42,6 +29,14 @@ export default async function PortalFilesPage({
         .order('created_at', { ascending: false })
     : { data: [] }
 
+  // The bucket is private, so downloads go through short-lived signed links
+  const { data: signed } = files?.length
+    ? await supabase.storage
+        .from(FILES_BUCKET)
+        .createSignedUrls(files.map((f) => f.storage_path), 60 * 60, { download: true })
+    : { data: [] }
+  const downloadUrls = new Map(signed?.map((s) => [s.path, s.signedUrl]))
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -50,7 +45,7 @@ export default async function PortalFilesPage({
       </div>
 
       {project && (
-        <PortalFileUpload projectId={project.id} clientSlug={clientSlug} clientId={session.clientId} />
+        <PortalFileUpload clientSlug={clientSlug} />
       )}
 
       {(files?.length ?? 0) === 0 ? (
@@ -68,7 +63,7 @@ export default async function PortalFilesPage({
               <div className="flex-1 min-w-0">
                 <p className="font-mono text-sm truncate" style={{ color: '#f0ece3' }}>{f.name}</p>
                 <p className="font-mono text-xs mt-0.5" style={{ color: '#555555' }}>
-                  {new Date(f.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {formatDate(f.created_at, 'medium')}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -85,6 +80,15 @@ export default async function PortalFilesPage({
                   >
                     you
                   </span>
+                )}
+                {downloadUrls.get(f.storage_path) && (
+                  <a
+                    href={downloadUrls.get(f.storage_path)}
+                    className="font-mono text-xs"
+                    style={{ color: '#f59e0b' }}
+                  >
+                    Download
+                  </a>
                 )}
               </div>
             </div>

@@ -38,7 +38,7 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Protect internal routes
-  const internalPaths = ['/dashboard', '/clients', '/projects', '/pipeline', '/finances', '/calendar', '/emails']
+  const internalPaths = ['/dashboard', '/clients', '/projects', '/pipeline', '/finances', '/calendar', '/emails', '/admin']
   const isInternal = internalPaths.some((p) => pathname === p || pathname.startsWith(p + '/'))
 
   if (isInternal && !user) {

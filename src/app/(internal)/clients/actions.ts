@@ -1,12 +1,14 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient as createSupabaseClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/supabase/server'
 import { logActivity } from '@/lib/logger'
 import type { ClientType, ClientStatus } from '@/types'
 
 function generateSlug(input: string): string {
   return input
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // Māori → maori, not mori
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '')
     .trim()
@@ -14,64 +16,51 @@ function generateSlug(input: string): string {
     .replace(/-+/g, '-')
 }
 
-export async function createClientAction(
-  _prev: { error: string } | null,
-  formData: FormData
-): Promise<{ error: string } | null> {
-  const name = formData.get('name') as string
-  const email = formData.get('email') as string
-  const phone = (formData.get('phone') as string) || null
-  const company = (formData.get('company') as string) || null
-  const type = formData.get('type') as ClientType
-  const status = formData.get('status') as ClientStatus
+function clientFields(formData: FormData) {
+  return {
+    name: (formData.get('name') as string)?.trim(),
+    email: (formData.get('email') as string)?.trim().toLowerCase(),
+    phone: (formData.get('phone') as string) || null,
+    company: (formData.get('company') as string) || null,
+    type: ((formData.get('type') as string) || 'other') as ClientType,
+    status: ((formData.get('status') as string) || 'lead') as ClientStatus,
+  }
+}
 
-  if (!name || !email) return { error: 'Name and email are required.' }
+export async function createClientAction(formData: FormData): Promise<{ error: string } | null> {
+  const { supabase } = await requireUser()
 
-  const slug = generateSlug(company || name)
+  const fields = clientFields(formData)
+  if (!fields.name || !fields.email) return { error: 'Name and email are required.' }
 
-  const supabase = await createSupabaseClient()
+  // Always suffixed, which also keeps slugs clear of the /portal/login-style routes
+  const slug = `${generateSlug(fields.company || fields.name)}-${Date.now().toString(36)}`
 
-  // Handle slug collision by appending timestamp
-  const finalSlug = `${slug}-${Date.now().toString(36)}`
-
-  const { error } = await supabase.from('clients').insert({
-    name, email, phone, company, type, status,
-    slug: finalSlug,
-    portal_access: false,
-  })
+  const { data: created, error } = await supabase
+    .from('clients')
+    .insert({ ...fields, slug, portal_access: false })
+    .select('id')
+    .single()
 
   if (error) return { error: error.message }
 
-  const { data: created } = await supabase.from('clients').select('id').eq('slug', finalSlug).single()
-  await logActivity({ type: 'audit', entity: 'client', entity_id: created?.id, action: 'created', meta: { name, email } })
+  await logActivity({ type: 'audit', entity: 'client', entity_id: created.id, action: 'created', meta: { name: fields.name, email: fields.email } })
 
   revalidatePath('/clients')
   return null
 }
 
-export async function updateClientAction(
-  _prev: { error: string } | null,
-  formData: FormData
-): Promise<{ error: string } | null> {
+export async function updateClientAction(formData: FormData): Promise<{ error: string } | null> {
+  const { supabase } = await requireUser()
+
   const id = formData.get('id') as string
-  const name = formData.get('name') as string
-  const email = formData.get('email') as string
-  const phone = (formData.get('phone') as string) || null
-  const company = (formData.get('company') as string) || null
-  const type = formData.get('type') as ClientType
-  const status = formData.get('status') as ClientStatus
+  const fields = clientFields(formData)
+  if (!fields.name || !fields.email) return { error: 'Name and email are required.' }
 
-  if (!name || !email) return { error: 'Name and email are required.' }
-
-  const supabase = await createSupabaseClient()
-  const { error } = await supabase
-    .from('clients')
-    .update({ name, email, phone, company, type, status })
-    .eq('id', id)
-
+  const { error } = await supabase.from('clients').update(fields).eq('id', id)
   if (error) return { error: error.message }
 
-  await logActivity({ type: 'audit', entity: 'client', entity_id: id, action: 'updated', meta: { name, email } })
+  await logActivity({ type: 'audit', entity: 'client', entity_id: id, action: 'updated', meta: { name: fields.name, email: fields.email } })
 
   revalidatePath('/clients')
   revalidatePath(`/clients/${id}`)
@@ -79,7 +68,7 @@ export async function updateClientAction(
 }
 
 export async function togglePortalAccessAction(id: string, current: boolean) {
-  const supabase = await createSupabaseClient()
+  const { supabase } = await requireUser()
   await supabase.from('clients').update({ portal_access: !current }).eq('id', id)
   revalidatePath(`/clients/${id}`)
 }

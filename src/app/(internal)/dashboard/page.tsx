@@ -5,31 +5,13 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { NEXT_ACTIONS, type ProjectStatus } from '@/types'
+import { NEXT_ACTIONS, type InvoiceStatus, type ProjectStatus } from '@/types'
 import { signOut } from '@/lib/supabase/actions'
-
-function formatNZD(value: number) {
-  const dollars = value / 100
-  if (dollars >= 1000) {
-    const k = dollars / 1000
-    return `$${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`
-  }
-  return `$${Math.round(dollars)}`
-}
-
-function daysSince(dateStr: string) {
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000)
-}
-
-function todayLabel() {
-  return new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-}
+import { daysSince, formatCompactNZD, formatDate, nzDate } from '@/lib/format'
+import { displayStatus } from '@/lib/invoices'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-
-  const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
   const [
     { data: projects },
@@ -47,15 +29,16 @@ export default async function DashboardPage() {
 
   // ── Stats ──────────────────────────────────────────────────────────────────
 
+  const thisMonth = nzDate().slice(0, 7)
   const revenueMTD = (invoices ?? [])
-    .filter((i) => i.status === 'paid' && i.paid_at && i.paid_at >= startOfMonth)
+    .filter((i) => i.status === 'paid' && i.paid_at && nzDate(i.paid_at).startsWith(thisMonth))
     .reduce((s, i) => s + i.amount, 0)
 
-  const outstanding = (invoices ?? [])
-    .filter((i) => i.status === 'sent')
-    .reduce((s, i) => s + i.amount, 0)
-
-  const outstandingCount = (invoices ?? []).filter((i) => i.status === 'sent').length
+  const unpaid = (invoices ?? []).filter((i) =>
+    ['sent', 'overdue'].includes(displayStatus({ status: i.status as InvoiceStatus, due_date: i.due_date }))
+  )
+  const outstanding = unpaid.reduce((s, i) => s + i.amount, 0)
+  const outstandingCount = unpaid.length
 
   const activeProjects = (projects ?? []).filter((p) =>
     ['in_progress', 'review', 'deposit_paid'].includes(p.status)
@@ -68,7 +51,7 @@ export default async function DashboardPage() {
   const stats = [
     {
       label: 'Revenue MTD',
-      value: formatNZD(revenueMTD),
+      value: formatCompactNZD(revenueMTD),
       sub: 'NZD inc. GST',
     },
     {
@@ -78,7 +61,7 @@ export default async function DashboardPage() {
     },
     {
       label: 'Outstanding',
-      value: formatNZD(outstanding),
+      value: formatCompactNZD(outstanding),
       sub: `${outstandingCount} invoice${outstandingCount !== 1 ? 's' : ''}`,
     },
     {
@@ -92,7 +75,7 @@ export default async function DashboardPage() {
     <>
       <Header
         title="Dashboard"
-        subtitle={todayLabel()}
+        subtitle={formatDate(new Date(), 'full')}
         actions={
           <div className="flex items-center gap-2">
             <Link href="/clients">
@@ -166,7 +149,7 @@ export default async function DashboardPage() {
 
                     <div className="text-right flex-shrink-0">
                       {p.value != null && (
-                        <p className="text-[#F5F0E8] text-sm font-mono">{formatNZD(p.value)}</p>
+                        <p className="text-[#F5F0E8] text-sm font-mono">{formatCompactNZD(p.value * 100)}</p>
                       )}
                       <Link href={`/projects/${p.id}`}>
                         <Button size="sm" variant="ghost" className="mt-1 text-[10px]">

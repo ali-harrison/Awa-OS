@@ -40,9 +40,7 @@ export function Card({
   )
 }
 
-interface CardHeaderProps extends HTMLAttributes<HTMLDivElement> {}
-
-export function CardHeader({ className = '', children, ...props }: CardHeaderProps) {
+export function CardHeader({ className = '', children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={['flex items-center justify-between mb-4', className].join(' ')}
@@ -53,9 +51,7 @@ export function CardHeader({ className = '', children, ...props }: CardHeaderPro
   )
 }
 
-interface CardTitleProps extends HTMLAttributes<HTMLHeadingElement> {}
-
-export function CardTitle({ className = '', children, ...props }: CardTitleProps) {
+export function CardTitle({ className = '', children, ...props }: HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h3
       className={[

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useActionState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -8,28 +8,10 @@ import { Input, Select } from '@/components/ui/Input'
 import { SlideOver } from '@/components/ui/SlideOver'
 import { updateClientAction, togglePortalAccessAction } from '../actions'
 import { generatePortalLinkAction } from './actions'
-import { NEXT_ACTIONS } from '@/types'
+import { useFormSubmit } from '@/lib/use-form-submit'
+import { formatDollars } from '@/lib/format'
+import { CLIENT_STATUS_OPTIONS, CLIENT_TYPE_OPTIONS, NEXT_ACTIONS } from '@/types'
 import type { Client, Project, ClientType, ClientStatus } from '@/types'
-
-const TYPE_OPTIONS = [
-  { value: 'charity', label: 'Charity / NFP' },
-  { value: 'gym', label: 'Gym / Fitness' },
-  { value: 'consultant', label: 'Consultant' },
-  { value: 'ecom', label: 'E-Commerce' },
-  { value: 'other', label: 'Other' },
-]
-
-const STATUS_OPTIONS = [
-  { value: 'lead', label: 'Lead' },
-  { value: 'prospect', label: 'Prospect' },
-  { value: 'active', label: 'Active' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'paused', label: 'Paused' },
-]
-
-function formatNZD(value: number) {
-  return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', minimumFractionDigits: 0 }).format(value)
-}
 
 export function ClientDetailClient({
   client,
@@ -39,7 +21,7 @@ export function ClientDetailClient({
   projects: Project[]
 }) {
   const [editOpen, setEditOpen] = useState(false)
-  const [editState, editAction, editPending] = useActionState(updateClientAction, null)
+  const edit = useFormSubmit(updateClientAction, () => setEditOpen(false))
   const [portalPending, startPortalTransition] = useTransition()
   const [portalLink, setPortalLink] = useState<string | null>(null)
   const [linkGenerating, setLinkGenerating] = useState(false)
@@ -171,7 +153,7 @@ export function ClientDetailClient({
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <Badge variant={p.status}>{p.status.replace(/_/g, ' ')}</Badge>
                   {p.value != null && (
-                    <span className="text-[#F5F0E8] font-mono text-sm">{formatNZD(p.value)}</span>
+                    <span className="text-[#F5F0E8] font-mono text-sm">{formatDollars(p.value)}</span>
                   )}
                 </div>
               </Link>
@@ -182,14 +164,8 @@ export function ClientDetailClient({
 
       {/* Edit slide-over */}
       <SlideOver open={editOpen} onClose={() => setEditOpen(false)} title="Edit Client">
-        <form
-          action={async (fd) => {
-            fd.append('id', client.id)
-            const result = await updateClientAction(null, fd)
-            if (!result) setEditOpen(false)
-          }}
-          className="flex flex-col gap-4"
-        >
+        <form onSubmit={edit.onSubmit} className="flex flex-col gap-4">
+          <input type="hidden" name="id" value={client.id} />
           <Input label="Name" name="name" required defaultValue={client.name} />
           <Input label="Email" name="email" type="email" required defaultValue={client.email} />
           <Input label="Phone" name="phone" type="tel" defaultValue={client.phone ?? ''} />
@@ -198,20 +174,20 @@ export function ClientDetailClient({
             label="Type"
             name="type"
             defaultValue={client.type}
-            options={TYPE_OPTIONS}
+            options={CLIENT_TYPE_OPTIONS}
           />
           <Select
             label="Status"
             name="status"
             defaultValue={client.status}
-            options={STATUS_OPTIONS}
+            options={CLIENT_STATUS_OPTIONS}
           />
-          {editState?.error && (
+          {edit.error && (
             <p className="text-[#E05252] font-mono text-xs border border-[#E0525233] bg-[#E0525211] px-3 py-2">
-              {editState.error}
+              {edit.error}
             </p>
           )}
-          <Button type="submit" loading={editPending} className="mt-2">
+          <Button type="submit" loading={edit.pending} className="mt-2">
             Save changes
           </Button>
         </form>

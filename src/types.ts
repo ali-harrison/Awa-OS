@@ -40,8 +40,10 @@ export interface Client {
   status: ClientStatus
   portal_access: boolean
   notes: string | null
-  portal_token: string | null
 }
+
+/** Everything the internal UI needs. Leaves out the password hash and portal token, which must never reach a browser. */
+export const CLIENT_COLUMNS = 'id, created_at, name, email, phone, company, type, slug, status, portal_access, notes'
 
 export interface Project {
   id: string
@@ -102,7 +104,7 @@ export interface LineItem {
 
 export interface Invoice {
   id: string
-  project_id: string
+  project_id: string | null
   client_id: string
   invoice_number: string
   status: InvoiceStatus
@@ -147,16 +149,6 @@ export interface EmailLog {
   status: EmailStatus
 }
 
-// ─── JOINED / EXTENDED TYPES ──────────────────────────────────────────────────
-
-export interface ProjectWithClient extends Project {
-  client: Client
-}
-
-export interface InvoiceWithClient extends Invoice {
-  client: Client
-}
-
 // ─── NEXT-STEP ENGINE ─────────────────────────────────────────────────────────
 
 export const NEXT_ACTIONS: Record<ProjectStatus, string> = {
@@ -172,16 +164,48 @@ export const NEXT_ACTIONS: Record<ProjectStatus, string> = {
   complete: 'Send testimonial request → archive project',
 }
 
-// ─── UTILITY ─────────────────────────────────────────────────────────────────
+// ─── SHARED OPTION LISTS ──────────────────────────────────────────────────────
 
-/** Format cents as NZD display string */
-export function formatNZD(cents: number): string {
-  return new Intl.NumberFormat('en-NZ', {
-    style: 'currency',
-    currency: 'NZD',
-    minimumFractionDigits: 2,
-  }).format(cents / 100)
-}
+export const PROJECT_STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
+  { value: 'onboarding', label: 'Onboarding' },
+  { value: 'questionnaire_sent', label: 'Questionnaire Sent' },
+  { value: 'questionnaire_received', label: 'Questionnaire Received' },
+  { value: 'proposal_sent', label: 'Proposal Sent' },
+  { value: 'contract_sent', label: 'Contract Sent' },
+  { value: 'deposit_pending', label: 'Deposit Pending' },
+  { value: 'deposit_paid', label: 'Deposit Paid' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'review', label: 'Review' },
+  { value: 'complete', label: 'Complete' },
+]
+
+/** Pipeline stages, in order. */
+export const PROJECT_STAGES: ProjectStatus[] = PROJECT_STATUS_OPTIONS.map((o) => o.value)
+
+export const CLIENT_TYPE_OPTIONS: { value: ClientType; label: string }[] = [
+  { value: 'charity', label: 'Charity / NFP' },
+  { value: 'gym', label: 'Gym / Fitness' },
+  { value: 'consultant', label: 'Consultant' },
+  { value: 'ecom', label: 'E-Commerce' },
+  { value: 'other', label: 'Other' },
+]
+
+export const CLIENT_STATUS_OPTIONS: { value: ClientStatus; label: string }[] = [
+  { value: 'lead', label: 'Lead' },
+  { value: 'prospect', label: 'Prospect' },
+  { value: 'active', label: 'Active' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'paused', label: 'Paused' },
+]
+
+export const EVENT_TYPE_OPTIONS: { value: CalendarEventType; label: string }[] = [
+  { value: 'deadline', label: 'Deadline' },
+  { value: 'meeting', label: 'Meeting' },
+  { value: 'milestone', label: 'Milestone' },
+  { value: 'reminder', label: 'Reminder' },
+]
+
+// ─── INVOICE NUMBERS ──────────────────────────────────────────────────────────
 
 /** Generate invoice number: TWD-{YEAR}-{4-digit-sequence} */
 export function formatInvoiceNumber(year: number, sequence: number): string {

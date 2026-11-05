@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AWA/OS
 
-## Getting Started
+The operating system for Te Wairama Digital: clients, projects, pipeline, invoices,
+calendar and email in one internal app, plus a portal for clients.
 
-First, run the development server:
+Next.js 16 · Supabase (Postgres, Auth, Storage) · Resend · Stripe · deployed on Vercel.
+
+## Getting started
 
 ```bash
+npm install
+cp .env.example .env.local   # then fill in your values
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). Internal users are Supabase Auth users.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Database changes live in `supabase/migrations`. Apply them with `supabase db push`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command         | What it does               |
+| --------------- | -------------------------- |
+| `npm run dev`   | Start the dev server       |
+| `npm run build` | Production build           |
+| `npm run lint`  | ESLint                     |
 
-## Learn More
+## How it fits together
 
-To learn more about Next.js, take a look at the following resources:
+**Internal app** (`src/app/(internal)`) — anyone logged in through Supabase Auth. Protected by
+`src/proxy.ts`, by RLS, and by `requireUser()`, which every Server Action calls first.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Client portal** (`src/app/portal`) — clients don't have Supabase logins. They get a one-time
+setup link, set a password, and hold a signed `portal_session` cookie. Portal code uses the
+service role client, so every page, route and action must start with `requirePortalClient(slug)`,
+and only query that client's rows. The logged-in pages sit in the `(portal)` route group so
+`/portal/[clientSlug]/setup` stays outside their auth layout.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+In `npm run dev`, portal pages render without logging in, for previewing. This never applies in production.
 
-## Deploy on Vercel
+## Money
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Invoice amounts (`invoices.amount`, `line_items`) are **integer cents**. Project values
+(`projects.value`) are **dollars**. Use `formatNZD` for cents and `formatDollars` for dollars,
+both from `src/lib/format.ts`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Stripe
+
+Invoices are paid through Payment Links. Point a webhook at `/api/webhooks/stripe` and subscribe to:
+
+- `checkout.session.completed`
+- `checkout.session.async_payment_succeeded`

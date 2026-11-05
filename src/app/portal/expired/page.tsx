@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 export default function ExpiredPage() {
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center px-4">
@@ -10,7 +12,13 @@ export default function ExpiredPage() {
           <p className="text-[#8A8580] font-mono text-sm leading-relaxed">
             This portal link has expired or is invalid. Please contact your project manager for a new link.
           </p>
-          <div className="mt-6 pt-6 border-t border-[#1A1A1A]">
+          <div className="mt-6 pt-6 border-t border-[#1A1A1A] flex flex-col gap-3">
+            <Link
+              href="/portal/login"
+              className="text-[#F5F0E8] font-mono text-xs hover:text-[#C9963A] transition-colors duration-150"
+            >
+              Already set your password? Log in →
+            </Link>
             <a
               href="mailto:ali@tewairama.digital"
               className="text-[#F5F0E8] font-mono text-xs hover:text-[#C9963A] transition-colors duration-150"

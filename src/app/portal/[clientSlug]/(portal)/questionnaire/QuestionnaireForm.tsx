@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import { submitQuestionnaireAction } from './actions'
+import { saveQuestionnaireDraftAction, submitQuestionnaireAction } from './actions'
+import { formatDate } from '@/lib/format'
 import type { QuestionnaireTemplate, QuestionnaireResponse, QuestionItem } from '@/types'
 
 const card = {
@@ -15,16 +16,20 @@ const card = {
 export function QuestionnaireForm({
   template,
   projectId,
+  clientSlug,
   existingResponse,
 }: {
   template: QuestionnaireTemplate
   projectId: string
+  clientSlug: string
   existingResponse: QuestionnaireResponse | null
 }) {
   const questions: QuestionItem[] = [...template.questions].sort((a, b) => a.order - b.order)
 
   const [answers, setAnswers] = useState<Record<string, string>>(existingResponse?.responses ?? {})
   const [submitting, setSubmitting] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [draftSaved, setDraftSaved] = useState(false)
   const [submitted, setSubmitted] = useState(existingResponse?.completed ?? false)
   const [error, setError] = useState<string | null>(null)
 
@@ -39,9 +44,7 @@ export function QuestionnaireForm({
           </p>
           {existingResponse?.submitted_at && (
             <p className="font-mono text-xs mt-3" style={{ color: '#555555' }}>
-              Submitted {new Date(existingResponse.submitted_at).toLocaleDateString('en-NZ', {
-                day: 'numeric', month: 'long', year: 'numeric',
-              })}
+              Submitted {formatDate(existingResponse.submitted_at, 'long')}
             </p>
           )}
         </div>
@@ -68,13 +71,23 @@ export function QuestionnaireForm({
     }
     setSubmitting(true)
     setError(null)
-    const result = await submitQuestionnaireAction(projectId, template.id, answers)
+    const result = await submitQuestionnaireAction(clientSlug, projectId, template.id, answers)
     if (result.error) {
       setError(result.error)
       setSubmitting(false)
     } else {
       setSubmitted(true)
     }
+  }
+
+  async function handleSaveDraft() {
+    setSavingDraft(true)
+    setDraftSaved(false)
+    setError(null)
+    const result = await saveQuestionnaireDraftAction(clientSlug, projectId, template.id, answers)
+    setSavingDraft(false)
+    if (result.error) setError(result.error)
+    else setDraftSaved(true)
   }
 
   return (
@@ -89,7 +102,7 @@ export function QuestionnaireForm({
 
       {/* Required notice */}
       <p className="font-mono text-xs" style={{ color: '#555555' }}>
-        Questions marked <span style={{ color: '#ef4444' }}>*</span> are required. You can come back and your answers will be saved.
+        Questions marked <span style={{ color: '#ef4444' }}>*</span> are required. Save a draft to come back and finish later.
       </p>
 
       {/* Questions */}
@@ -105,7 +118,10 @@ export function QuestionnaireForm({
           )}
           <textarea
             value={answers[q.id] ?? ''}
-            onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+            onChange={(e) => {
+              setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
+              setDraftSaved(false)
+            }}
             rows={3}
             className="w-full font-mono text-sm px-3 py-2 outline-none resize-y transition-colors duration-150"
             style={{ background: '#111111', color: '#f0ece3', border: '1px solid #2a2a2a', borderRadius: 4 }}
@@ -122,9 +138,17 @@ export function QuestionnaireForm({
         </p>
       )}
 
-      <Button type="submit" loading={submitting} className="self-start">
-        Submit questionnaire →
-      </Button>
+      <div className="flex items-center gap-3">
+        <Button type="submit" loading={submitting} disabled={savingDraft}>
+          Submit questionnaire →
+        </Button>
+        <Button type="button" variant="secondary" loading={savingDraft} disabled={submitting} onClick={handleSaveDraft}>
+          Save draft
+        </Button>
+        {draftSaved && (
+          <span className="font-mono text-xs" style={{ color: '#10b981' }}>Draft saved</span>
+        )}
+      </div>
     </form>
   )
 }

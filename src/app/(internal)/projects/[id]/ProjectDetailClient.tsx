@@ -1,32 +1,23 @@
 'use client'
 
-import { useState, useActionState, useTransition, useRef } from 'react'
+import { useState, useTransition, useRef } from 'react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Select, Textarea } from '@/components/ui/Input'
 import {
   createTaskAction,
   updateTaskStatusAction,
-  createEventAction,
   saveNotesAction,
   updateStatusAction,
   createFileRecordAction,
 } from './actions'
-import { NEXT_ACTIONS } from '@/types'
+import { createCalendarEventAction } from '../../calendar/actions'
+import { createClient } from '@/lib/supabase/client'
+import { useFormSubmit } from '@/lib/use-form-submit'
+import { formatDate, formatDollars, localInputToISO } from '@/lib/format'
+import { FILES_BUCKET, storageFileName } from '@/lib/storage'
+import { EVENT_TYPE_OPTIONS, NEXT_ACTIONS, PROJECT_STATUS_OPTIONS } from '@/types'
 import type { Project, Client, Task, ProjectFile, CalendarEvent, ProjectStatus, FileType, CalendarEventType } from '@/types'
-
-const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
-  { value: 'onboarding', label: 'Onboarding' },
-  { value: 'questionnaire_sent', label: 'Questionnaire Sent' },
-  { value: 'questionnaire_received', label: 'Questionnaire Received' },
-  { value: 'proposal_sent', label: 'Proposal Sent' },
-  { value: 'contract_sent', label: 'Contract Sent' },
-  { value: 'deposit_pending', label: 'Deposit Pending' },
-  { value: 'deposit_paid', label: 'Deposit Paid' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'review', label: 'Review' },
-  { value: 'complete', label: 'Complete' },
-]
 
 const FILE_TYPE_OPTIONS: { value: FileType; label: string }[] = [
   { value: 'document', label: 'Document' },
@@ -37,23 +28,12 @@ const FILE_TYPE_OPTIONS: { value: FileType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ]
 
-const EVENT_TYPE_OPTIONS: { value: CalendarEventType; label: string }[] = [
-  { value: 'deadline', label: 'Deadline' },
-  { value: 'meeting', label: 'Meeting' },
-  { value: 'milestone', label: 'Milestone' },
-  { value: 'reminder', label: 'Reminder' },
-]
-
 type Tab = 'tasks' | 'files' | 'timeline' | 'notes' | 'questionnaire'
-
-function formatNZD(value: number) {
-  return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', minimumFractionDigits: 0 }).format(value)
-}
 
 // ─── Tasks Tab ────────────────────────────────────────────────────────────────
 
 function TasksTab({ tasks, projectId }: { tasks: Task[]; projectId: string }) {
-  const [taskState, taskAction, taskPending] = useActionState(createTaskAction, null)
+  const addTask = useFormSubmit(createTaskAction)
   const [, startTransition] = useTransition()
 
   return (
@@ -90,7 +70,7 @@ function TasksTab({ tasks, projectId }: { tasks: Task[]; projectId: string }) {
                 </p>
                 {t.due_date && (
                   <p className="text-[#555050] font-mono text-xs mt-0.5">
-                    Due {new Date(t.due_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+                    Due {formatDate(t.due_date)}
                   </p>
                 )}
               </div>
@@ -108,7 +88,7 @@ function TasksTab({ tasks, projectId }: { tasks: Task[]; projectId: string }) {
       {/* Add task form */}
       <div className="border border-[#1A1A1A] p-4">
         <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-3">Add task</p>
-        <form action={taskAction} className="flex flex-col gap-3">
+        <form onSubmit={addTask.onSubmit} className="flex flex-col gap-3">
           <input type="hidden" name="project_id" value={projectId} />
           <Input name="title" placeholder="Task title" required />
           <div className="grid grid-cols-2 gap-3">
@@ -123,10 +103,10 @@ function TasksTab({ tasks, projectId }: { tasks: Task[]; projectId: string }) {
               </div>
             </div>
           </div>
-          {taskState?.error && (
-            <p className="text-[#E05252] font-mono text-xs">{taskState.error}</p>
+          {addTask.error && (
+            <p className="text-[#E05252] font-mono text-xs">{addTask.error}</p>
           )}
-          <Button type="submit" size="sm" loading={taskPending} variant="secondary">
+          <Button type="submit" size="sm" loading={addTask.pending} variant="secondary">
             Add task
           </Button>
         </form>
@@ -138,21 +118,16 @@ function TasksTab({ tasks, projectId }: { tasks: Task[]; projectId: string }) {
 // ─── File Row (with download) ─────────────────────────────────────────────────
 
 function FileRow({ file }: { file: ProjectFile }) {
-  const [url, setUrl] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleDownload() {
-    const { createBrowserClient } = await import('@supabase/ssr')
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-    const { data } = await supabase.storage.from('project-files').createSignedUrl(file.storage_path, 60)
-    if (data?.signedUrl) {
-      const a = document.createElement('a')
-      a.href = data.signedUrl
-      a.download = file.name
-      a.click()
-    }
+    setError(null)
+    const { data, error: signError } = await createClient()
+      .storage.from(FILES_BUCKET)
+      .createSignedUrl(file.storage_path, 60, { download: file.name })
+
+    if (signError || !data) setError('Download failed.')
+    else window.location.href = data.signedUrl
   }
 
   return (
@@ -160,12 +135,13 @@ function FileRow({ file }: { file: ProjectFile }) {
       <div className="flex-1 min-w-0">
         <p className="text-[#F5F0E8] font-mono text-sm truncate">{file.name}</p>
         <p className="text-[#555050] font-mono text-xs mt-0.5">
-          {new Date(file.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+          {formatDate(file.created_at, 'medium')}
         </p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <Badge variant="muted">{file.type.replace(/_/g, ' ')}</Badge>
         <Badge variant={file.uploaded_by === 'client' ? 'amber' : 'muted'}>{file.uploaded_by}</Badge>
+        {error && <span className="text-[#E05252] font-mono text-[10px]">{error}</span>}
         <button
           onClick={handleDownload}
           className="text-[#555050] hover:text-[#F5F0E8] font-mono text-[10px] transition-colors cursor-pointer"
@@ -201,7 +177,12 @@ function QuestionnaireTab({ response }: { response: QuestionnaireResponseWithTem
     <div className="flex flex-col gap-1">
       {response.submitted_at && (
         <p className="text-[#4CAF7D] font-mono text-xs mb-4">
-          Submitted {new Date(response.submitted_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })}
+          Submitted {formatDate(response.submitted_at, 'long')}
+        </p>
+      )}
+      {!response.completed && (
+        <p className="text-[#C9963A] font-mono text-xs mb-4">
+          Draft — the client has started this but hasn&apos;t submitted it yet.
         </p>
       )}
       {questions.map((q, i) => {
@@ -230,6 +211,7 @@ function FilesTab({ files, projectId, clientId, clientSlug }: {
   clientSlug: string
 }) {
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [fileType, setFileType] = useState<FileType>('document')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -237,24 +219,22 @@ function FilesTab({ files, projectId, clientId, clientSlug }: {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
+    setUploadError(null)
     try {
-      const { createBrowserClient } = await import('@supabase/ssr')
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
-      const path = `${clientSlug}/${projectId}/${fileType}/${file.name}`
-      const { error } = await supabase.storage.from('project-files').upload(path, file, { upsert: true })
-      if (!error) {
-        await createFileRecordAction({
-          projectId,
-          clientId,
-          name: file.name,
-          type: fileType,
-          storagePath: path,
-          uploadedBy: 'internal',
-        })
+      const path = `${clientSlug}/${projectId}/${fileType}/${storageFileName(file.name)}`
+      const { error } = await createClient().storage.from(FILES_BUCKET).upload(path, file)
+      if (error) {
+        setUploadError(error.message)
+        return
       }
+      const saved = await createFileRecordAction({
+        projectId,
+        clientId,
+        name: file.name,
+        type: fileType,
+        storagePath: path,
+      })
+      if (saved.error) setUploadError(saved.error)
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -292,6 +272,7 @@ function FilesTab({ files, projectId, clientId, clientSlug }: {
             />
           </div>
           {uploading && <p className="text-[#C9963A] font-mono text-xs">Uploading…</p>}
+          {uploadError && <p className="text-[#E05252] font-mono text-xs">{uploadError}</p>}
         </div>
       </div>
     </div>
@@ -301,9 +282,13 @@ function FilesTab({ files, projectId, clientId, clientSlug }: {
 // ─── Timeline Tab ─────────────────────────────────────────────────────────────
 
 function TimelineTab({ events, projectId }: { events: CalendarEvent[]; projectId: string }) {
-  const [eventState, eventAction, eventPending] = useActionState(createEventAction, null)
+  const addEvent = useFormSubmit((fd) => {
+    fd.set('start_at', localInputToISO(fd.get('start_at') as string))
+    fd.set('end_at', localInputToISO(fd.get('end_at') as string))
+    return createCalendarEventAction(fd)
+  })
 
-  const eventTypeColors: Record<CalendarEventType, string> = {
+  const eventTypeColors: Record<CalendarEventType, 'amber' | 'green' | 'muted' | 'default'> = {
     deadline: 'amber',
     meeting: 'default',
     milestone: 'green',
@@ -316,35 +301,31 @@ function TimelineTab({ events, projectId }: { events: CalendarEvent[]; projectId
         <p className="text-[#555050] font-mono text-sm py-4">No events yet.</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {events
-            .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
-            .map((ev) => (
-              <div key={ev.id} className="flex gap-4 border-l-2 border-[#1A1A1A] pl-4 py-1">
-                <div>
-                  <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest">
-                    {new Date(ev.start_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
-                  </p>
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[#F5F0E8] font-mono text-sm">{ev.title}</p>
-                    <Badge variant={eventTypeColors[ev.type] as 'amber' | 'green' | 'muted' | 'default'}>
-                      {ev.type}
-                    </Badge>
-                    {ev.visible_to_client && <Badge variant="muted">client visible</Badge>}
-                  </div>
-                  {ev.description && (
-                    <p className="text-[#8A8580] font-mono text-xs mt-0.5">{ev.description}</p>
-                  )}
-                </div>
+          {events.map((ev) => (
+            <div key={ev.id} className="flex gap-4 border-l-2 border-[#1A1A1A] pl-4 py-1">
+              <div>
+                <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest">
+                  {formatDate(ev.start_at)}
+                </p>
               </div>
-            ))}
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-[#F5F0E8] font-mono text-sm">{ev.title}</p>
+                  <Badge variant={eventTypeColors[ev.type]}>{ev.type}</Badge>
+                  {ev.visible_to_client && <Badge variant="muted">client visible</Badge>}
+                </div>
+                {ev.description && (
+                  <p className="text-[#8A8580] font-mono text-xs mt-0.5">{ev.description}</p>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
       <div className="border border-[#1A1A1A] p-4">
         <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-3">Add event</p>
-        <form action={eventAction} className="flex flex-col gap-3">
+        <form onSubmit={addEvent.onSubmit} className="flex flex-col gap-3">
           <input type="hidden" name="project_id" value={projectId} />
           <Input name="title" label="Title" required />
           <Select name="type" label="Type" defaultValue="milestone" options={EVENT_TYPE_OPTIONS} />
@@ -359,10 +340,10 @@ function TimelineTab({ events, projectId }: { events: CalendarEvent[]; projectId
               Visible to client
             </label>
           </div>
-          {eventState?.error && (
-            <p className="text-[#E05252] font-mono text-xs">{eventState.error}</p>
+          {addEvent.error && (
+            <p className="text-[#E05252] font-mono text-xs">{addEvent.error}</p>
           )}
-          <Button type="submit" size="sm" loading={eventPending} variant="secondary">
+          <Button type="submit" size="sm" loading={addEvent.pending} variant="secondary">
             Add event
           </Button>
         </form>
@@ -452,7 +433,7 @@ export function ProjectDetailClient({
             }
             className="bg-[#111111] text-[#F5F0E8] border border-[#2A2A2A] hover:border-[#3A3A3A] font-mono text-xs px-2 py-1 outline-none cursor-pointer"
           >
-            {STATUS_OPTIONS.map((opt) => (
+            {PROJECT_STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value} className="bg-[#111111]">
                 {opt.label}
               </option>
@@ -465,9 +446,9 @@ export function ProjectDetailClient({
       <div className="grid grid-cols-2 md:grid-cols-4 border border-[#1A1A1A] divide-x divide-[#1A1A1A] mb-5">
         {[
           { label: 'Tier', value: project.tier ?? '—' },
-          { label: 'Value', value: project.value != null ? formatNZD(project.value) : '—' },
-          { label: 'Start', value: project.start_date ? new Date(project.start_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : '—' },
-          { label: 'Due', value: project.estimated_completion ? new Date(project.estimated_completion).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : '—' },
+          { label: 'Value', value: project.value != null ? formatDollars(project.value) : '—' },
+          { label: 'Start', value: project.start_date ? formatDate(project.start_date) : '—' },
+          { label: 'Due', value: project.estimated_completion ? formatDate(project.estimated_completion, 'medium') : '—' },
         ].map(({ label, value }) => (
           <div key={label} className="px-4 py-3">
             <p className="text-[#555050] font-mono text-[10px] uppercase tracking-widest mb-1">{label}</p>

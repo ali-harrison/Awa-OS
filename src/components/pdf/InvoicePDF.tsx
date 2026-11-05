@@ -2,7 +2,8 @@ import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/rendere
 import path from 'path'
 
 // ─── Font ─────────────────────────────────────────────────────────────────────
-// Local files in /public/fonts — no network fetch, works in Vercel serverless
+// Local files in /public/fonts — no network fetch. Server-only: this reads from disk,
+// and next.config.ts makes sure the files ship with the serverless functions.
 
 Font.register({
   family: 'JetBrains Mono',
@@ -239,7 +240,7 @@ export function InvoicePDF(props: InvoiceProps) {
           </View>
           {tax > 0 ? (
             <View style={s.totalsRow}>
-              <Text style={s.totalsLabel}>GST (15%)</Text>
+              <Text style={s.totalsLabel}>Includes GST (15%)</Text>
               <Text style={s.totalsValue}>{nzd(tax)}</Text>
             </View>
           ) : null}
@@ -291,5 +292,3 @@ export function InvoicePDF(props: InvoiceProps) {
     </Document>
   )
 }
-
-export default InvoicePDF

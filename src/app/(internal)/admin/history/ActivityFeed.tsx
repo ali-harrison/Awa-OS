@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { formatDateTime } from '@/lib/format'
 
 type LogEntry = {
   id: string
@@ -64,10 +65,7 @@ function LogRow({ log }: { log: LogEntry }) {
   const changeField = meta.field != null ? String(meta.field) : null
   const changeOld = meta.old_value != null ? String(meta.old_value) : '—'
   const changeNew = meta.new_value != null ? String(meta.new_value) : '—'
-  const absoluteTime = new Date(log.created_at).toLocaleString('en-NZ', {
-    day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
+  const absoluteTime = formatDateTime(log.created_at)
 
   return (
     <div className="flex gap-4 px-4 py-3 border-b border-[#1A1A1A] hover:bg-[#0D0D0D] transition-colors duration-100">
@@ -138,7 +136,7 @@ function LogRow({ log }: { log: LogEntry }) {
 
       {/* Timestamp */}
       <div className="flex-shrink-0 text-right" title={absoluteTime}>
-        <span className="text-[#555050] font-mono text-xs cursor-default">
+        <span className="text-[#555050] font-mono text-xs cursor-default" suppressHydrationWarning>
           {relativeTime(log.created_at)}
         </span>
       </div>
